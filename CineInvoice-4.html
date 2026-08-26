@@ -1180,7 +1180,9 @@ function pullFromCalendar(showToast) {
   };
 
   return doPull(null, true, []).then(function(events) {
+    console.log('[CineInvoice] Pull returned ' + events.length + ' event(s) from Calendar');
     var changed = reconcileFromCalendar(events);
+    console.log('[CineInvoice] Reconciled ' + changed + ' local change(s)');
     pulling = false;
     updateSyncStatus();
     if (changed > 0) {
@@ -1195,7 +1197,7 @@ function pullFromCalendar(showToast) {
     }
   }).catch(function(e) {
     pulling = false;
-    console.warn('Pull failed:', e);
+    console.warn('[CineInvoice] Pull failed:', e);
     updateSyncStatus('Pull error');
     if (showToast) toast('Pull failed: ' + e.message, 'error');
   });
@@ -1214,7 +1216,9 @@ function reconcileFromCalendar(events) {
   });
 
   Object.keys(byItemId).forEach(function(itemId) {
-    if (isRecentlyPushed(itemId)) return; // skip — we just pushed this, our version wins
+    // Note: we used to skip items pushed within the last 15s to avoid reconciling our own push echoes.
+    // But content-comparison below already handles echoes correctly (no diff → no change), and the
+    // short-circuit was blocking legitimate GCal edits made shortly after a push. So we always reconcile.
 
     var itemEvents = byItemId[itemId];
     var kind = (itemEvents[0].extendedProperties && itemEvents[0].extendedProperties.private && itemEvents[0].extendedProperties.private.cineInvoiceKind) || 'job';
