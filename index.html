@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>CineInvoice — Freelance Cinematographer Tool</title>
+<title>CineWork — Freelance Cinematographer Tool</title>
 
 <!-- PWA / iOS home-screen support -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CineInvoice">
+<meta name="apple-mobile-web-app-title" content="CineWork">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d0d0f">
 <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%230d0d0f'/><text x='90' y='118' font-family='Georgia,serif' font-size='96' fill='%23e8c97a' text-anchor='middle' font-style='italic'>C</text></svg>">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%230d0d0f'/><text x='32' y='44' font-family='Georgia,serif' font-size='38' fill='%23e8c97a' text-anchor='middle' font-style='italic'>C</text></svg>">
-<link rel="manifest" href='data:application/manifest+json;utf8,{"name":"CineInvoice","short_name":"CineInvoice","start_url":".","display":"standalone","background_color":"%230d0d0f","theme_color":"%230d0d0f","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27><rect width=%27512%27 height=%27512%27 fill=%27%230d0d0f%27/><text x=%27256%27 y=%27340%27 font-family=%27Georgia,serif%27 font-size=%27280%27 fill=%27%23e8c97a%27 text-anchor=%27middle%27 font-style=%27italic%27>C</text></svg>","sizes":"512x512","type":"image/svg+xml","purpose":"any"}]}'>
+<link rel="manifest" href='data:application/manifest+json;utf8,{"name":"CineWork","short_name":"CineWork","start_url":".","display":"standalone","background_color":"%230d0d0f","theme_color":"%230d0d0f","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27><rect width=%27512%27 height=%27512%27 fill=%27%230d0d0f%27/><text x=%27256%27 y=%27340%27 font-family=%27Georgia,serif%27 font-size=%27280%27 fill=%27%23e8c97a%27 text-anchor=%27middle%27 font-style=%27italic%27>C</text></svg>","sizes":"512x512","type":"image/svg+xml","purpose":"any"}]}'>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -198,7 +198,7 @@
 <div class="app">
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-title">CineInvoice</div>
+      <div class="logo-title">CineWork</div>
       <div class="logo-sub">Freelancer Studio</div>
     </div>
     <nav class="nav">
@@ -386,7 +386,7 @@
       <!-- GOOGLE DRIVE SYNC -->
       <div class="card" style="max-width:600px;margin-top:16px;">
         <h2 style="margin-bottom:8px;">Google Drive Sync</h2>
-        <p style="color:var(--text2);font-size:13px;margin-bottom:20px;">All your data is written to <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;">CineInvoice-Data.xlsx</code> in your Google Drive. Every save writes to it, every app open reads from it.</p>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:20px;">All your data is written to <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;">CineWork-Data.xlsx</code> in your Google Drive. Every save writes to it, every app open reads from it.</p>
 
         <div class="form-grid">
           <div class="form-group full">
@@ -408,7 +408,7 @@
               <span>Two-way sync with Google Calendar (primary)</span>
             </label>
             <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5;">
-              Confirmed jobs show as regular events; inquiries appear as tentative/transparent (they don't block other calendar users). Edits or deletions made directly in Google Calendar flow back into CineInvoice on next pull (app open + tab focus).
+              Confirmed jobs show as regular events; inquiries appear as tentative/transparent (they don't block other calendar users). Edits or deletions made directly in Google Calendar flow back into CineWork on next pull (app open + tab focus).
             </div>
           </div>
         </div>
@@ -599,8 +599,8 @@
 <script>
 // ── DATA ─────────────────────────────────────────────────────────────
 const DB = {
-  get: k => { try { return JSON.parse(localStorage.getItem('ci_'+k) || 'null'); } catch(e) { return null; } },
-  set: (k, v) => localStorage.setItem('ci_'+k, JSON.stringify(v))
+  get: k => { try { return JSON.parse(localStorage.getItem('cw_'+k) || 'null'); } catch(e) { return null; } },
+  set: (k, v) => localStorage.setItem('cw_'+k, JSON.stringify(v))
 };
 
 let settings = DB.get('settings') || {
@@ -636,7 +636,7 @@ var driveState = {
 };
 var tokenClient = null;
 var syncTimer = null;
-var DATA_FILENAME = 'CineInvoice-Data.xlsx';
+var DATA_FILENAME = 'CineWork-Data.xlsx';
 var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 function updateSyncStatus(txt) {
@@ -970,7 +970,7 @@ function buildGCalEvent(item, kind) {
   }
   if (item.location)   descLines.push('Location: ' + item.location);
   if (item.notes)      descLines.push('\n' + item.notes);
-  descLines.push('\n— From CineInvoice');
+  descLines.push('\n— From CineWork');
   var statusMap = { completed: 'confirmed', ongoing: 'confirmed', cancelled: 'cancelled', inquiry: 'tentative' };
   var colorMap  = { completed: '5', ongoing: '9', cancelled: '8', inquiry: '6' };
   var titlePrefix = (kind === 'inquiry' ? '[Inquiry] ' : '') + (isHalf ? '½ ' : '');
@@ -985,10 +985,10 @@ function buildGCalEvent(item, kind) {
     transparency: (kind === 'inquiry' ? 'transparent' : 'opaque'),
     extendedProperties: {
       private: {
-        cineInvoiceApp: 'true',
-        cineInvoiceId: item.id,
-        cineInvoiceKind: kind,
-        cineInvoiceHalfDay: isHalf ? 'true' : 'false'
+        cineWorkApp: 'true',
+        cineWorkId: item.id,
+        cineWorkKind: kind,
+        cineWorkHalfDay: isHalf ? 'true' : 'false'
       }
     }
   };
@@ -1135,6 +1135,16 @@ function pullFromCalendar(showToast) {
   if (!driveState.connected || settings.gcalSync === false) return Promise.resolve();
   if (pulling) return Promise.resolve();
   pulling = true;
+
+  // One-time migration: tokens minted before this build were issued against a filtered
+  // query and are not safely replayable. Drop once and re-mint from a clean full sync.
+  if (settings.gcalSyncScheme !== 2) {
+    settings.gcalSyncToken = null;
+    settings.gcalSyncScheme = 2;
+    DB.set('settings', settings);
+    console.log('[CineWork] Sync scheme upgraded — forcing one full sync');
+  }
+
   updateSyncStatus('Pulling from Calendar...');
 
   var doPull = function(pageToken, useSyncToken, accumulatedEvents) {
@@ -1152,8 +1162,11 @@ function pullFromCalendar(showToast) {
         // ignores any event that isn't ours.
         params.set('syncToken', settings.gcalSyncToken);
       } else {
-        // Full sync — filter server-side, and only look back 90 days to keep it fast
-        params.set('privateExtendedProperty', 'cineInvoiceApp=true');
+        // Full sync. We deliberately do NOT filter on privateExtendedProperty here
+        // either: the nextSyncToken inherits the query it was minted from, and that
+        // query must be replayable on the incremental call — where restricting
+        // filters are rejected (400 syncTokenWithRequestRestrictions). One code path,
+        // filtered client-side in both directions.
         var lookback = new Date();
         lookback.setDate(lookback.getDate() - 90);
         params.set('timeMin', lookback.toISOString());
@@ -1185,9 +1198,9 @@ function pullFromCalendar(showToast) {
   };
 
   return doPull(null, true, []).then(function(events) {
-    console.log('[CineInvoice] Pull returned ' + events.length + ' event(s) from Calendar');
+    console.log('[CineWork] Pull returned ' + events.length + ' event(s) from Calendar');
     var changed = reconcileFromCalendar(events);
-    console.log('[CineInvoice] Reconciled ' + changed + ' local change(s)');
+    console.log('[CineWork] Reconciled ' + changed + ' local change(s)');
     pulling = false;
     updateSyncStatus();
     if (changed > 0) {
@@ -1202,7 +1215,7 @@ function pullFromCalendar(showToast) {
     }
   }).catch(function(e) {
     pulling = false;
-    console.warn('[CineInvoice] Pull failed:', e);
+    console.warn('[CineWork] Pull failed:', e);
     updateSyncStatus('Pull error');
     if (showToast) toast('Pull failed: ' + e.message, 'error');
   });
@@ -1229,7 +1242,7 @@ function hydrateItemEvents(item, itemEvents) {
       location: item.location,
       start: { date: dates[i] },
       end:   { date: dates[i] },
-      extendedProperties: { private: { cineInvoiceHalfDay: fracs[i] === 0.5 ? 'true' : 'false' } }
+      extendedProperties: { private: { cineWorkHalfDay: fracs[i] === 0.5 ? 'true' : 'false' } }
     });
   });
   // Events we received but didn't know about (e.g. re-created after an external delete)
@@ -1258,8 +1271,8 @@ function reconcileFromCalendar(events) {
   var kindByItemId = {};
   events.forEach(function(evt) {
     var ep = (evt.extendedProperties && evt.extendedProperties.private) || {};
-    var id = ep.cineInvoiceId;
-    var kind = ep.cineInvoiceKind;
+    var id = ep.cineWorkId;
+    var kind = ep.cineWorkKind;
     if (!id) {
       var known = evt.id && eventIdToItem[evt.id];
       if (!known) return; // not one of ours
@@ -1297,7 +1310,7 @@ function reconcileFromCalendar(events) {
         var newDates = live.map(function(e) { return e.start.date; });
         var newFractions = live.map(function(e) {
           var priv = (e.extendedProperties && e.extendedProperties.private) || {};
-          return priv.cineInvoiceHalfDay === 'true' ? 0.5 : 1;
+          return priv.cineWorkHalfDay === 'true' ? 0.5 : 1;
         });
         var newEventIds = live.map(function(e) { return e.id; });
         var newName = live[0].summary ? live[0].summary.replace(/^\[Inquiry\]\s*/, '').replace(/^½\s*/, '') : job.name;
@@ -1329,7 +1342,7 @@ function reconcileFromCalendar(events) {
       var newEndDate = evt.end && evt.end.date;
       var newDays = newDate && newEndDate ? daysBetweenIso(newDate, newEndDate) : job.days;
       var evPriv = (evt.extendedProperties && evt.extendedProperties.private) || {};
-      var evIsHalf = evPriv.cineInvoiceHalfDay === 'true';
+      var evIsHalf = evPriv.cineWorkHalfDay === 'true';
       if (evIsHalf) newDays = 0.5;
       var newName = evt.summary ? evt.summary.replace(/^\[Inquiry\]\s*/, '').replace(/^½\s*/, '') : job.name;
       var newLoc = evt.location || job.location;
@@ -2574,7 +2587,7 @@ document.addEventListener('visibilitychange', function() {
 // ── PWA / OFFLINE SUPPORT ────────────────────────────────────────────
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   var swCode = "\
-var CACHE = 'cineinvoice-v1';\
+var CACHE = 'cinework-v1';\
 self.addEventListener('install', function(e) { self.skipWaiting(); });\
 self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });\
 self.addEventListener('fetch', function(e) {\
