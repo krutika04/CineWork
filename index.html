@@ -1140,15 +1140,20 @@ function pullFromCalendar(showToast) {
   var doPull = function(pageToken, useSyncToken, accumulatedEvents) {
     return ensureToken().then(function(token) {
       var params = new URLSearchParams();
-      params.set('privateExtendedProperty', 'cineInvoiceApp=true');
       params.set('showDeleted', 'true');
       params.set('singleEvents', 'true');
       params.set('maxResults', '250');
       if (pageToken) params.set('pageToken', pageToken);
       if (useSyncToken && settings.gcalSyncToken) {
+        // Incremental sync. Google rejects syncToken combined with any restricting
+        // filter (privateExtendedProperty, timeMin/timeMax, q, orderBy, updatedMin)
+        // with a 400 — the token already encodes the query it came from. So we pull
+        // everything that changed and filter client-side; reconcileFromCalendar
+        // ignores any event that isn't ours.
         params.set('syncToken', settings.gcalSyncToken);
       } else {
-        // Full sync — only look back 90 days to keep it fast
+        // Full sync — filter server-side, and only look back 90 days to keep it fast
+        params.set('privateExtendedProperty', 'cineInvoiceApp=true');
         var lookback = new Date();
         lookback.setDate(lookback.getDate() - 90);
         params.set('timeMin', lookback.toISOString());
@@ -1180,7 +1185,9 @@ function pullFromCalendar(showToast) {
   };
 
   return doPull(null, true, []).then(function(events) {
+    console.log('[CineInvoice] Pull returned ' + events.length + ' event(s) from Calendar');
     var changed = reconcileFromCalendar(events);
+    console.log('[CineInvoice] Reconciled ' + changed + ' local change(s)');
     pulling = false;
     updateSyncStatus();
     if (changed > 0) {
@@ -1195,34 +1202,88 @@ function pullFromCalendar(showToast) {
     }
   }).catch(function(e) {
     pulling = false;
-    console.warn('Pull failed:', e);
+    console.warn('[CineInvoice] Pull failed:', e);
     updateSyncStatus('Pull error');
     if (showToast) toast('Pull failed: ' + e.message, 'error');
   });
 }
 
+// Incremental pulls only return the events that changed. For an item spread across
+// several events, that means we may see one event of three — not enough to rewrite the
+// whole item. Fill the gaps from what we already hold locally before reconciling.
+function hydrateItemEvents(item, itemEvents) {
+  var known = item.gcalEventIds || [];
+  if (known.length < 2) return itemEvents;
+  var received = {};
+  itemEvents.forEach(function(e) { if (e.id) received[e.id] = e; });
+  var dates = item.dates || (item.date ? [item.date] : []);
+  var fracs = item.dayFractions || [];
+  var out = [];
+  known.forEach(function(eid, i) {
+    if (received[eid]) { out.push(received[eid]); delete received[eid]; return; }
+    if (!dates[i]) return;
+    // Synthesise the unchanged event from local state so the diff below sees no change
+    out.push({
+      id: eid,
+      summary: item.name,
+      location: item.location,
+      start: { date: dates[i] },
+      end:   { date: dates[i] },
+      extendedProperties: { private: { cineInvoiceHalfDay: fracs[i] === 0.5 ? 'true' : 'false' } }
+    });
+  });
+  // Events we received but didn't know about (e.g. re-created after an external delete)
+  Object.keys(received).forEach(function(k) { out.push(received[k]); });
+  return out;
+}
+
 function reconcileFromCalendar(events) {
   var changed = 0;
+
+  // Deleted events come back stripped — typically just id + status:'cancelled', with no
+  // extendedProperties — so they can't be matched on our marker. Build a reverse index
+  // from the event IDs we stored locally so external deletions still land.
+  var eventIdToItem = {};
+  logs.forEach(function(l) {
+    if (l.gcalEventId) eventIdToItem[l.gcalEventId] = { id: l.id, kind: 'job' };
+    (l.gcalEventIds || []).forEach(function(eid) { eventIdToItem[eid] = { id: l.id, kind: 'job' }; });
+  });
+  inquiries.forEach(function(q) {
+    if (q.gcalEventId) eventIdToItem[q.gcalEventId] = { id: q.id, kind: 'inquiry' };
+    (q.gcalEventIds || []).forEach(function(eid) { eventIdToItem[eid] = { id: q.id, kind: 'inquiry' }; });
+  });
+
   // Group events by our local item id
   var byItemId = {};
+  var kindByItemId = {};
   events.forEach(function(evt) {
-    var ep = evt.extendedProperties && evt.extendedProperties.private;
-    if (!ep || !ep.cineInvoiceId) return;
+    var ep = (evt.extendedProperties && evt.extendedProperties.private) || {};
     var id = ep.cineInvoiceId;
+    var kind = ep.cineInvoiceKind;
+    if (!id) {
+      var known = evt.id && eventIdToItem[evt.id];
+      if (!known) return; // not one of ours
+      id = known.id;
+      kind = kind || known.kind;
+    }
     if (!byItemId[id]) byItemId[id] = [];
     byItemId[id].push(evt);
+    if (kind && !kindByItemId[id]) kindByItemId[id] = kind;
   });
 
   Object.keys(byItemId).forEach(function(itemId) {
-    if (isRecentlyPushed(itemId)) return; // skip — we just pushed this, our version wins
+    // Note: we used to skip items pushed within the last 15s to avoid reconciling our own push echoes.
+    // But content-comparison below already handles echoes correctly (no diff → no change), and the
+    // short-circuit was blocking legitimate GCal edits made shortly after a push. So we always reconcile.
 
     var itemEvents = byItemId[itemId];
-    var kind = (itemEvents[0].extendedProperties && itemEvents[0].extendedProperties.private && itemEvents[0].extendedProperties.private.cineInvoiceKind) || 'job';
+    var kind = kindByItemId[itemId] || 'job';
 
     if (kind === 'job') {
       var jobIdx = logs.findIndex(function(x) { return x.id === itemId; });
       if (jobIdx === -1) return; // not in local — skip
       var job = logs[jobIdx];
+      itemEvents = hydrateItemEvents(job, itemEvents);
 
       // Multi-event job (from non-contiguous inquiry conversion, half days, etc.)
       if (itemEvents.length > 1) {
@@ -1287,6 +1348,7 @@ function reconcileFromCalendar(events) {
       var inqIdx = inquiries.findIndex(function(x) { return x.id === itemId; });
       if (inqIdx === -1) return;
       var inq = inquiries[inqIdx];
+      itemEvents = hydrateItemEvents(inq, itemEvents);
       // Keep only non-cancelled events, sorted by date
       var live = itemEvents.filter(function(e) { return e.status !== 'cancelled' && e.start && e.start.date; })
                            .sort(function(a,b) { return a.start.date < b.start.date ? -1 : 1; });
