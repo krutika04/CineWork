@@ -1,0 +1,3634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CineWork — Freelance Cinematographer Tool</title>
+
+<!-- PWA / iOS home-screen support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CineWork">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%230d0d0f'/><text x='90' y='118' font-family='Georgia,serif' font-size='96' fill='%23e8c97a' text-anchor='middle' font-style='italic'>C</text></svg>">
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%230d0d0f'/><text x='32' y='44' font-family='Georgia,serif' font-size='38' fill='%23e8c97a' text-anchor='middle' font-style='italic'>C</text></svg>">
+<link rel="manifest" href='data:application/manifest+json;utf8,{"name":"CineWork","short_name":"CineWork","start_url":".","display":"standalone","background_color":"%230d0d0f","theme_color":"%230d0d0f","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27><rect width=%27512%27 height=%27512%27 fill=%27%230d0d0f%27/><text x=%27256%27 y=%27340%27 font-family=%27Georgia,serif%27 font-size=%27280%27 fill=%27%23e8c97a%27 text-anchor=%27middle%27 font-style=%27italic%27>C</text></svg>","sizes":"512x512","type":"image/svg+xml","purpose":"any"}]}'>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    /* surfaces */
+    --bg: #0d0d0f;
+    --rail: #111113;
+    --panel: #141416;
+    --sunk: #101012;
+    --bg2: #141416;
+    --bg3: #1c1c20;
+    --bg4: #242428;
+    /* lines */
+    --line-soft: #1f1f24;
+    --line: #24242a;
+    --border: #24242a;
+    --border2: #2a2a30;
+    --line-gold: #3a3121;
+    /* ink */
+    --text: #f0ede8;
+    --text2: #9e9b96;
+    --text3: #5a5855;
+    /* accents */
+    --accent: #e8c97a;
+    --accent2: #c9a84c;
+    --accent-bright: #f3dda0;
+    --accent-ink: #1a1508;
+    --accent-dim: rgba(232,201,122,0.12);
+    --accent-faint: rgba(232,201,122,0.06);
+    --red: #e07070;
+    --green: #7abf8a;
+    --blue: #7aade0;
+    /* type */
+    --font-serif: 'DM Serif Display', Georgia, serif;
+    --font-sans: 'Outfit', system-ui, sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, monospace;
+    /* shape */
+    --radius: 9px;
+    --radius-lg: 18px;
+    --rail-w: 216px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--text); font-family: var(--font-sans); font-size: 15px; line-height: 1.6;
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+  }
+  @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: 16px; } }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-bright); }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
+  @keyframes cwIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes cwFade { from { opacity: 0; } to { opacity: 1; } }
+
+  .mono { font-family: var(--font-mono); }
+  .muted { color: var(--text2); }
+  .faint { color: var(--text3); }
+  .eyebrow { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text3); }
+  .text-right { text-align: right; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .money { font-family: var(--font-mono); }
+
+  /* ── SHELL ───────────────────────────────────────────── */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: var(--rail-w); flex: none; background: var(--rail); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100;
+    padding-top: env(safe-area-inset-top);
+  }
+  .brand { padding: 26px 22px 20px; }
+  .brand-name { font-family: var(--font-serif); font-size: 23px; color: var(--accent); line-height: 1; }
+  .brand-sub { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text3); margin-top: 6px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; flex: 1; overflow-y: auto; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 13px; border-radius: var(--radius);
+    border: none; background: transparent; color: var(--text2); cursor: pointer;
+    font-size: 13.5px; font-family: inherit; transition: all .15s; width: 100%; text-align: left;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 500; }
+  .nav-mark { width: 18px; display: flex; justify-content: center; font-size: 13px; font-family: var(--font-mono); opacity: .9; }
+  .nav-label { flex: 1; }
+  .nav-count { font-family: var(--font-mono); font-size: 11px; opacity: .75; }
+  .sidebar-foot { padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
+  .status-line { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text3); }
+  .status-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex: none; }
+
+  .main { margin-left: var(--rail-w); flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: 14px; padding: 20px 32px; border-bottom: 1px solid var(--bg3);
+    position: sticky; top: 0; background: rgba(13,13,15,.92); backdrop-filter: blur(10px); z-index: 20;
+    padding-top: calc(20px + env(safe-area-inset-top));
+  }
+  .topbar-text { flex: 1; min-width: 0; }
+  .topbar-title { font-family: var(--font-serif); font-size: 26px; line-height: 1.1; }
+  .topbar-sub { font-size: 12.5px; color: var(--text2); margin-top: 3px; }
+  .page { display: none; padding: 26px 32px 96px; }
+  .page.active { display: flex; flex-direction: column; gap: 16px; animation: cwIn .22s ease both; }
+
+  /* ── PANELS ──────────────────────────────────────────── */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px 20px; min-width: 0; }
+  .panel.flush { padding: 0; overflow: hidden; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .panel-title { font-family: var(--font-serif); font-size: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; }
+  .card + .card { margin-top: 16px; }
+  h1 { font-family: var(--font-serif); font-size: 26px; font-weight: 400; line-height: 1.2; }
+  h2 { font-family: var(--font-serif); font-size: 20px; font-weight: 400; margin-bottom: 6px; }
+  h3 { font-size: 10.5px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.16em; margin-bottom: 14px; }
+  .divider { height: 1px; background: var(--line); margin: 22px 0; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+
+  /* ── CONTROLS ────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 17px; border-radius: var(--radius); font-family: var(--font-sans);
+    font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all .15s;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn-primary:hover { background: var(--accent-bright); }
+  .btn-hold { background: transparent; border: 1px dashed var(--accent2); color: var(--accent); }
+  .btn-hold:hover { background: rgba(232,201,122,.1); }
+  .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+  .btn-secondary:hover { background: var(--bg4); color: var(--text); }
+  .btn-quiet { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-quiet:hover { color: var(--text); background: var(--bg3); }
+  .btn-danger { background: rgba(224,112,112,0.12); color: var(--red); border: 1px solid rgba(224,112,112,0.3); }
+  .btn-danger:hover { background: rgba(224,112,112,0.22); }
+  .btn-sm { padding: 7px 13px; font-size: 12px; }
+  .btn-group { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border2); background: var(--bg3);
+    color: var(--text2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--bg4); }
+  .chip {
+    padding: 9px 15px; border-radius: var(--radius); cursor: pointer; font-size: 12.5px; font-family: inherit;
+    transition: all .15s; background: var(--panel); border: 1px solid var(--line); color: var(--text2);
+  }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: var(--accent-dim); border-color: var(--accent2); color: var(--accent); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .segment { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+  .pill {
+    padding: 6px 11px; border-radius: 7px; border: none; cursor: pointer; font-size: 11.5px; font-weight: 500;
+    font-family: inherit; background: transparent; color: var(--text2); transition: all .15s;
+  }
+  .pill:hover { color: var(--text); }
+  .pill.active { background: var(--accent-dim); color: var(--accent); }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .searchbox {
+    display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px;
+    padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  .searchbox span { color: var(--text3); font-size: 13px; }
+  .searchbox input { background: transparent; border: none; outline: none; color: var(--text); font-size: 13.5px; font-family: var(--font-sans); flex: 1; padding: 0; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 10.5px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 500; }
+  input, select, textarea {
+    background: var(--sunk); border: 1px solid var(--border2); border-radius: var(--radius); color: var(--text);
+    font-family: var(--font-sans); font-size: 13.5px; padding: 10px 13px; width: 100%; outline: none; transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent2); }
+  select option { background: var(--bg3); }
+  textarea { resize: vertical; min-height: 80px; }
+  .select-sm { width: auto; min-width: 130px; padding: 9px 12px; font-size: 12.5px; background: var(--panel); border-color: var(--line); }
+
+  /* ── STATS ───────────────────────────────────────────── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 19px 21px; }
+  .stat-label { font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text3); }
+  .stat-value { font-family: var(--font-mono); font-size: clamp(17px, 2vw, 25px); margin-top: 9px; white-space: nowrap; }
+  .stat-sub { font-size: 11.5px; color: var(--text2); margin-top: 3px; }
+  .stat-card.gold { background: var(--accent-faint); border-color: var(--line-gold); }
+  .stat-card.gold .stat-value { color: var(--accent); }
+  .stat-card.red { background: rgba(224,112,112,.05); border-color: #3a2626; }
+  .stat-card.red .stat-value { color: var(--red); }
+
+  /* ── DECISIONS ───────────────────────────────────────── */
+  .decision-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px;
+    align-content: start; max-height: 210px; overflow-y: auto; padding-right: 2px;
+  }
+  .decision {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--sunk);
+    border: 1px solid var(--line-soft); border-radius: 11px; cursor: pointer; transition: border-color .15s; text-align: left;
+  }
+  .decision:hover { border-color: var(--line-gold); }
+  .decision-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 7px; flex: none; }
+  .decision-name { font-size: 13px; color: var(--text); }
+  .decision-note { font-size: 11.5px; color: var(--text2); margin-top: 2px; }
+
+  /* ── TODAY HERO ──────────────────────────────────────── */
+  .today-card { background: linear-gradient(160deg, #1a1710, var(--panel)); border: 1px solid var(--line-gold); border-radius: 20px; padding: 20px 22px; }
+  .today-title { font-family: var(--font-serif); font-size: 21px; }
+  .today-meta { font-size: 12.5px; color: var(--text2); margin-top: 4px; }
+  .today-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; font-family: var(--font-mono); font-size: 13px; flex-wrap: wrap; }
+
+  /* ── ROW LISTS (work / money) ────────────────────────── */
+  .rows { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+  .row-head, .row {
+    display: grid; gap: 12px; align-items: center;
+  }
+  .row-head {
+    padding: 13px 22px; border-bottom: 1px solid var(--line);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text3);
+  }
+  .row { padding: 14px 22px; border-bottom: 1px solid var(--bg3); cursor: pointer; transition: background .15s; }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: #18181c; }
+  .work-cols { grid-template-columns: 2.1fr 1.3fr 112px 84px 1fr 118px 78px; }
+  .money-cols { grid-template-columns: 118px 1.8fr 1.3fr 96px 1fr 118px 96px; }
+  .row-name { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-sub { font-size: 11.5px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-dim { font-size: 13px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--text2); }
+  .row-value { font-family: var(--font-mono); font-size: 13.5px; text-align: right; color: var(--text); }
+  .row-next { font-size: 11.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; opacity: 0; transition: opacity .15s; }
+  .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
+  .mini {
+    border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); border-radius: 7px;
+    width: 26px; height: 26px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .mini:hover { color: var(--text); background: var(--bg4); }
+  .mini.danger:hover { color: var(--red); border-color: rgba(224,112,112,.4); }
+  .stage {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .stage-inquiry { color: var(--accent2); border: 1px dashed var(--accent2); }
+  .stage-confirmed { color: var(--accent); background: rgba(232,201,122,.12); }
+  .stage-shooting { color: var(--blue); background: rgba(122,173,224,.14); }
+  .stage-shot { color: var(--blue); background: rgba(122,173,224,.10); }
+  .stage-invoiced { color: var(--accent); background: rgba(232,201,122,.10); }
+  .stage-paid { color: var(--green); background: rgba(122,191,138,.14); }
+  .stage-cancelled { color: var(--text3); background: var(--bg3); }
+
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; }
+  .badge-paid { background: rgba(122,191,138,0.15); color: var(--green); }
+  .badge-unpaid { background: rgba(232,201,122,0.15); color: var(--accent); }
+  .badge-overdue { background: rgba(224,112,112,0.15); color: var(--red); }
+  .badge-draft { background: var(--bg3); color: var(--text3); }
+  .badge-inquiry { background: transparent; color: var(--accent); border: 1px dashed var(--accent2); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: var(--bg3); color: var(--text3); }
+
+  /* ── CLIENTS ─────────────────────────────────────────── */
+  .client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: 16px; }
+  .client-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; display: flex; flex-direction: column; gap: 14px; transition: border-color .15s; }
+  .client-card:hover { border-color: var(--line-gold); }
+  .client-name { font-family: var(--font-serif); font-size: 19px; line-height: 1.2; }
+  .client-meta { font-size: 11.5px; color: var(--text3); margin-top: 4px; }
+  .client-stats { display: flex; gap: 18px; }
+  .client-stat-val { font-family: var(--font-mono); font-size: 17px; }
+  .client-stat-label { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); margin-top: 2px; }
+  .tier { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .tier-anchor { color: var(--accent); background: rgba(232,201,122,.12); }
+  .tier-growing { color: var(--blue); background: rgba(122,173,224,.12); }
+  .tier-slow { color: var(--red); background: rgba(224,112,112,.12); }
+  .tier-new { color: var(--text3); background: var(--bg3); }
+  .contact-list { display: flex; flex-direction: column; gap: 6px; max-height: 130px; overflow-y: auto; padding-right: 2px; }
+  .contact {
+    display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 11px;
+    background: var(--sunk); border: 1px solid var(--line-soft); border-radius: var(--radius);
+  }
+  .contact-name { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contact-role { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .add-card {
+    background: transparent; border: 1px dashed var(--line-gold); border-radius: var(--radius-lg); padding: 22px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 240px;
+    color: var(--accent); font-size: 13.5px; font-family: inherit; cursor: pointer; text-align: center; transition: background .15s;
+  }
+  .add-card:hover { background: var(--accent-faint); }
+  .add-card .plus { font-size: 24px; line-height: 1; }
+  .add-card .hint { font-size: 11.5px; color: var(--text3); max-width: 210px; line-height: 1.5; }
+  .contact-row { display: grid; grid-template-columns: 1fr 1fr 34px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .contact-row input { padding: 8px 11px; font-size: 13px; }
+
+  /* ── CALENDAR ────────────────────────────────────────── */
+  .cal-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .cal-nav { display: flex; align-items: center; gap: 6px; }
+  .cal-title { font-family: var(--font-serif); font-size: 20px; flex: 1; min-width: 0; }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px;
+    background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden;
+  }
+  .cal-dow { background: var(--sunk); padding: 8px 10px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text3); }
+  .cal-cell { background: var(--panel); min-height: 104px; padding: 7px 7px 5px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: background .15s; }
+  .cal-cell:hover { background: var(--bg3); }
+  .cal-cell.other-month { background: var(--sunk); }
+  .cal-cell.today { box-shadow: inset 0 0 0 1px var(--accent2); }
+  .cal-daynum {
+    font-size: 12px; font-family: var(--font-mono); align-self: flex-start; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text2);
+  }
+  .cal-cell.other-month .cal-daynum { color: #3a3a40; }
+  .cal-cell.today .cal-daynum { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .cal-event {
+    font-size: 10.5px; line-height: 1.35; padding: 3px 5px; border-radius: 3px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; cursor: pointer; background: rgba(232,201,122,.13); border-left: 2px solid var(--accent); color: var(--text);
+  }
+  .cal-event.ongoing { background: rgba(122,173,224,.14); border-left-color: var(--blue); }
+  .cal-event.paid { background: rgba(122,191,138,.12); border-left-color: var(--green); }
+  .cal-event.cancelled { background: var(--line-soft); color: var(--text3); text-decoration: line-through; border-left-color: var(--text3); }
+  .cal-event.inquiry { background: transparent; border: 1px dashed var(--accent2); color: var(--accent); font-style: italic; }
+  .cal-more { font-size: 10px; color: var(--text3); padding-left: 5px; cursor: pointer; }
+  .cal-more:hover { color: var(--accent); }
+  .cal-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 11.5px; color: var(--text3); flex-wrap: wrap; }
+  .cal-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .cal-summary { margin-top: 10px; font-size: 11.5px; color: var(--text3); }
+  .cal-weeks { display: flex; flex-direction: column; gap: 10px; }
+  .week-row { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 14px 16px; background: var(--sunk); border: 1px solid var(--line-soft); border-radius: 12px; }
+  .week-range { font-size: 12.5px; color: var(--text); }
+  .week-load { font-family: var(--font-mono); font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .week-items { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .week-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); cursor: pointer;
+    font-size: 12.5px; color: var(--text); background: #18181c; border-left: 2px solid var(--accent);
+  }
+  .week-item.inquiry { background: transparent; border: 1px dashed var(--accent2); font-style: italic; }
+  .week-item .wi-days { font-family: var(--font-mono); font-size: 11px; color: var(--text3); width: 52px; flex: none; }
+  .week-item .wi-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .week-item .wi-amt { font-family: var(--font-mono); font-size: 11.5px; color: var(--text2); }
+  .week-empty { font-size: 12px; color: var(--text3); padding: 6px 2px; }
+  .cal-year { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .year-cell { background: var(--sunk); border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; }
+  .year-cell:hover { border-color: var(--line-gold); }
+  .year-cell.current { border-color: var(--accent2); }
+  .year-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .year-name { font-size: 12px; color: var(--text); }
+  .year-earn { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
+  .pips { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 10px; }
+  .pip { width: 7px; height: 7px; border-radius: 2px; background: var(--bg3); }
+  .pip.booked { background: var(--accent); }
+  .pip.held { background: transparent; box-shadow: inset 0 0 0 1px var(--accent2); }
+  .pip.shooting { background: var(--blue); }
+  .pip.paid { background: var(--green); }
+  .year-sub { font-size: 10.5px; color: var(--text3); margin-top: 8px; }
+  .cal-day-modal-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line-soft); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; transition: border-color .15s; }
+  .cal-day-modal-item:hover { border-color: var(--line-gold); }
+  .cal-day-modal-item-name { color: var(--text); font-weight: 500; font-size: 14px; }
+  .cal-day-modal-item-meta { color: var(--text3); font-size: 12px; margin-top: 2px; }
+  .cal-day-modal-item-earn { color: var(--accent); font-family: var(--font-mono); font-size: 13px; }
+
+  /* ── MODALS / MISC ───────────────────────────────────── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; animation: cwFade .15s both; }
+  .modal { background: var(--panel); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 28px; max-width: 700px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+  .modal-title { font-family: var(--font-serif); font-size: 22px; }
+  .modal-close { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 22px; line-height: 1; padding: 4px; }
+  .modal-close:hover { color: var(--text); }
+  .line-items-header { display: grid; grid-template-columns: 2fr 80px 110px 100px 40px; gap: 8px; font-size: 10.5px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.12em; padding: 0 4px; margin-bottom: 8px; }
+  .line-item { display: grid; grid-template-columns: 2fr 80px 110px 100px 40px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .line-item input { padding: 8px 10px; font-size: 13px; }
+  .line-item-total { font-family: var(--font-mono); font-size: 13px; color: var(--text); padding: 8px 10px; background: var(--bg3); border-radius: var(--radius); text-align: right; }
+  .remove-line { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+  .remove-line:hover { color: var(--red); background: rgba(224,112,112,0.1); }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 20px; font-size: 14px; color: var(--text); z-index: 1000; opacity: 0; transform: translateY(8px); transition: all .25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: rgba(122,191,138,0.5); color: var(--green); }
+  .toast.error { border-color: rgba(224,112,112,0.5); color: var(--red); }
+  .lock-note {
+    display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px 14px;
+    background: var(--sunk); border: 1px solid var(--line-gold); border-radius: var(--radius);
+    font-size: 12.5px; color: var(--text2); line-height: 1.55;
+  }
+  .lock-note b { color: var(--accent); font-family: var(--font-mono); font-weight: 500; }
+  .lock-note .lock-mark { flex: none; opacity: .8; }
+  .lock-note .btn { flex: none; margin-left: auto; align-self: center; }
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
+  .empty-icon { font-size: 26px; margin-bottom: 12px; opacity: .5; }
+  .empty-state p { font-size: 13.5px; }
+  .chart-container { position: relative; height: 260px; margin-top: 8px; }
+  .status-pill { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--border2); border-radius: var(--radius); font-size: 12.5px; color: var(--text2); }
+  .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+  .status-pill.on { border-color: #2a3a2e; background: rgba(122,191,138,.07); color: var(--green); }
+  .status-pill.on .dot { background: var(--green); }
+  .table-wrap { overflow-x: auto; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.14em; border-bottom: 1px solid var(--line); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--bg3); color: var(--text2); vertical-align: middle; }
+  tr:hover td { background: #18181c; }
+  tr:last-child td { border-bottom: none; }
+  .td-primary { color: var(--text); font-weight: 500; }
+
+  /* invoice preview keeps its paper look */
+  .invoice-preview { background: #fff; color: #111; border-radius: var(--radius-lg); padding: 48px; font-family: var(--font-sans); max-width: 720px; }
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .inv-logo { font-family: var(--font-serif); font-size: 28px; color: #1a1a1a; }
+  .inv-logo-sub { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.1em; }
+  .inv-number { text-align: right; }
+  .inv-number-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.1em; }
+  .inv-number-val { font-size: 24px; font-weight: 600; color: #111; font-family: var(--font-mono); }
+  .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; }
+  .inv-party-label { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .inv-party-name { font-weight: 600; font-size: 15px; margin-bottom: 2px; color: #111; }
+  .inv-party-detail { font-size: 13px; color: #555; line-height: 1.5; }
+  .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  .inv-table th { text-align: left; padding: 8px 12px; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid #eee; }
+  .inv-table td { padding: 10px 12px; font-size: 13px; color: #333; border-bottom: 1px solid #f0f0f0; }
+  .inv-totals { margin-left: auto; width: 260px; }
+  .inv-total-row { display: flex; justify-content: space-between; font-size: 13px; color: #555; padding: 5px 0; }
+  .inv-total-row.grand { font-weight: 600; font-size: 16px; color: #111; border-top: 2px solid #111; margin-top: 8px; padding-top: 12px; }
+  .inv-footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #eee; font-size: 12px; color: #999; }
+
+  /* ── MOBILE ──────────────────────────────────────────── */
+  .mobilebar { display: none; }
+  @media (max-width: 1080px) {
+    .work-cols { grid-template-columns: 2fr 1.2fr 104px 1fr 110px; }
+    .money-cols { grid-template-columns: 110px 1.6fr 96px 1fr 110px; }
+    .work-cols > .col-days, .work-cols > .col-actions,
+    .money-cols > .col-client, .money-cols > .col-actions { display: none; }
+    .cal-year { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 820px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .topbar { padding: 16px 18px; padding-top: calc(16px + env(safe-area-inset-top)); gap: 10px; }
+    .topbar-title { font-size: 22px; }
+    .topbar .btn { padding: 8px 12px; font-size: 12px; }
+    .topbar .btn-hold span { display: none; }
+    .page { padding: 18px 16px 120px; }
+    .desktop-only { display: none !important; }
+    .decision-grid { max-height: none; grid-template-columns: 1fr; }
+    .work-cols { grid-template-columns: 1fr 92px; }
+    .money-cols { grid-template-columns: 1fr 100px; }
+    .work-cols > .col-client, .work-cols > .col-dates, .work-cols > .col-stage-head,
+    .money-cols > .col-due, .money-cols > .col-number { display: none; }
+    .row, .row-head { padding: 13px 16px; }
+    .row-actions { opacity: 1; }
+    .cal-cell { min-height: 62px; padding: 4px; gap: 2px; }
+    .cal-event { font-size: 9.5px; padding: 2px 3px; }
+    .cal-dow { padding: 6px 5px; font-size: 9px; letter-spacing: .1em; }
+    .cal-daynum { width: 20px; height: 20px; font-size: 11px; }
+    .cal-title { font-size: 17px; }
+    .cal-year { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .week-row { grid-template-columns: 1fr; gap: 10px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .line-items-header { display: none; }
+    .line-item { grid-template-columns: 1fr 1fr; }
+    .line-item input:first-child { grid-column: 1 / -1; }
+    .modal { padding: 20px; border-radius: 16px; }
+    .invoice-preview { padding: 24px; }
+    .toast { left: 16px; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); }
+    .mobilebar {
+      display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: rgba(17,17,19,.96); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    }
+    .mtab {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0;
+      border: none; background: transparent; cursor: pointer; color: var(--text3); font-size: 10px; letter-spacing: .04em;
+    }
+    .mtab .mtab-mark { font-family: var(--font-mono); font-size: 15px; line-height: 1; }
+    .mtab.active { color: var(--accent); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">CineWork</div>
+      <div class="brand-sub" id="brand-sub">Freelancer Studio</div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+        <span class="nav-mark">&#9687;</span><span class="nav-label">Calendar</span><span class="nav-count" id="count-dashboard"></span>
+      </button>
+      <button class="nav-item" data-page="log" onclick="navigate('log')">
+        <span class="nav-mark">&#9636;</span><span class="nav-label">Work</span><span class="nav-count" id="count-log"></span>
+      </button>
+      <button class="nav-item" data-page="invoices" onclick="navigate('invoices')">
+        <span class="nav-mark">&#8377;</span><span class="nav-label">Money</span><span class="nav-count" id="count-invoices"></span>
+      </button>
+      <button class="nav-item" data-page="clients" onclick="navigate('clients')">
+        <span class="nav-mark">&#9678;</span><span class="nav-label">Clients</span><span class="nav-count" id="count-clients"></span>
+      </button>
+      <button class="nav-item" data-page="analytics" onclick="navigate('analytics')">
+        <span class="nav-mark">&#9683;</span><span class="nav-label">Insights</span><span class="nav-count" id="count-analytics"></span>
+      </button>
+      <button class="nav-item" data-page="settings" onclick="navigate('settings')">
+        <span class="nav-mark">&#9881;</span><span class="nav-label">Settings</span><span class="nav-count"></span>
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="status-line" id="sync-status">
+        <span class="dot" id="sync-dot"></span><span id="sync-label">Not connected</span>
+      </div>
+      <div class="status-line">
+        <span class="dot" id="gcal-dot"></span><span id="gcal-label">Calendar sync off</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-text">
+        <div class="topbar-title" id="topbar-title">Calendar</div>
+        <div class="topbar-sub" id="topbar-sub">&nbsp;</div>
+      </div>
+      <button class="btn btn-hold" onclick="openModal('inquiry')">Hold<span>&nbsp;dates</span></button>
+      <button class="btn btn-primary" onclick="openModal('log')">New job</button>
+    </header>
+
+    <!-- ═══════════ CALENDAR (home) ═══════════ -->
+    <div id="page-dashboard" class="page active">
+      <div id="today-slot"></div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span class="eyebrow">Needs a decision</span>
+          <span class="mono muted" id="decision-count" style="font-size:11.5px;">0 open</span>
+        </div>
+        <div class="decision-grid" id="decision-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="cal-toolbar">
+          <div class="cal-nav">
+            <button class="icon-btn" onclick="calShift(-1)" title="Previous">&#8249;</button>
+            <button class="icon-btn" onclick="calShift(1)" title="Next">&#8250;</button>
+            <button class="btn btn-quiet btn-sm" onclick="calToday()">Today</button>
+          </div>
+          <div class="cal-title" id="cal-title"></div>
+          <div class="segment">
+            <button class="pill active" data-mode="month" onclick="setCalMode('month')">Month</button>
+            <button class="pill" data-mode="weeks" onclick="setCalMode('weeks')">Weeks</button>
+            <button class="pill" data-mode="year" onclick="setCalMode('year')">Year</button>
+          </div>
+        </div>
+
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-weeks" id="cal-weeks" style="display:none;"></div>
+        <div class="cal-year" id="cal-year" style="display:none;"></div>
+
+        <div class="cal-legend" id="cal-legend">
+          <span><span class="cal-legend-dot" style="background:var(--accent);"></span>Confirmed / shot</span>
+          <span><span class="cal-legend-dot" style="border:1px dashed var(--accent2);"></span>Held for inquiry</span>
+          <span><span class="cal-legend-dot" style="background:var(--blue);"></span>Shooting now</span>
+          <span><span class="cal-legend-dot" style="background:var(--green);"></span>Paid</span>
+          <span><span class="cal-legend-dot" style="background:var(--text3);"></span>Cancelled</span>
+        </div>
+        <div class="cal-summary" id="cal-summary"></div>
+      </section>
+    </div>
+
+    <!-- ═══════════ WORK ═══════════ -->
+    <div id="page-log" class="page">
+      <div class="toolbar">
+        <div class="searchbox">
+          <span>&#8981;</span>
+          <input type="text" id="log-search" placeholder="Search jobs, clients, locations&hellip;" oninput="renderWork()">
+        </div>
+        <select id="log-filter-type" class="select-sm" onchange="renderWork()">
+          <option value="">All types</option>
+          <option>Commercial</option><option>Film</option><option>Documentary</option>
+          <option>Wedding</option><option>Event</option><option>Music Video</option>
+          <option>Corporate</option><option>Photography</option><option>Other</option>
+        </select>
+        <select id="log-filter-year" class="select-sm" onchange="renderWork()">
+          <option value="">All years</option>
+        </select>
+        <button class="btn btn-primary" onclick="openModal('log')">Log job</button>
+      </div>
+
+      <div class="chips" id="work-chips">
+        <button class="chip active" data-stage="all" onclick="setWorkFilter('all')">All</button>
+        <button class="chip" data-stage="inquiry" onclick="setWorkFilter('inquiry')">Inquiries</button>
+        <button class="chip" data-stage="confirmed" onclick="setWorkFilter('confirmed')">Confirmed</button>
+        <button class="chip" data-stage="shooting" onclick="setWorkFilter('shooting')">Shooting</button>
+        <button class="chip" data-stage="shot" onclick="setWorkFilter('shot')">To invoice</button>
+        <button class="chip" data-stage="invoiced" onclick="setWorkFilter('invoiced')">Invoiced</button>
+        <button class="chip" data-stage="paid" onclick="setWorkFilter('paid')">Paid</button>
+      </div>
+
+      <section class="rows">
+        <div class="row-head work-cols">
+          <span>Job</span><span class="col-client">Client</span><span class="col-dates">Dates</span>
+          <span class="col-days">Days</span><span class="col-stage-head">Stage</span>
+          <span class="text-right">Value</span><span class="col-actions"></span>
+        </div>
+        <div id="work-rows"></div>
+      </section>
+    </div>
+
+    <!-- ═══════════ MONEY ═══════════ -->
+    <div id="page-invoices" class="page">
+      <div class="stat-grid" id="money-stats"></div>
+
+      <div class="toolbar">
+        <div class="chips" id="inv-chips" style="flex:1;">
+          <button class="chip active" data-status="all" onclick="filterInvoices('all')">All</button>
+          <button class="chip" data-status="draft" onclick="filterInvoices('draft')">Draft</button>
+          <button class="chip" data-status="unpaid" onclick="filterInvoices('unpaid')">Unpaid</button>
+          <button class="chip" data-status="overdue" onclick="filterInvoices('overdue')">Overdue</button>
+          <button class="chip" data-status="paid" onclick="filterInvoices('paid')">Paid</button>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('invoice')">New invoice</button>
+      </div>
+
+      <section class="rows">
+        <div class="row-head money-cols">
+          <span class="col-number">Number</span><span>Job</span><span class="col-client">Client</span>
+          <span class="col-due">Due</span><span>Status</span>
+          <span class="text-right">Amount</span><span class="col-actions"></span>
+        </div>
+        <div id="invoice-rows"></div>
+      </section>
+    </div>
+
+    <!-- ═══════════ CLIENTS ═══════════ -->
+    <div id="page-clients" class="page">
+      <div class="client-grid" id="clients-grid"></div>
+    </div>
+
+    <!-- ═══════════ INSIGHTS ═══════════ -->
+    <div id="page-analytics" class="page">
+      <div class="stat-grid" id="insight-stats"></div>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;" class="insight-row">
+        <div class="panel">
+          <h3>Monthly revenue &mdash; <span id="chart-year">2025</span></h3>
+          <div class="chart-container"><canvas id="revenueChart"></canvas></div>
+        </div>
+        <div class="panel">
+          <h3>Invoice status</h3>
+          <div class="chart-container"><canvas id="statusChart"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Jobs by type &mdash; <span id="type-year"></span></h3>
+        <div class="chart-container" style="height:280px;"><canvas id="typeChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SETTINGS ═══════════ -->
+    <div id="page-settings" class="page">
+      <div class="panel" style="max-width:680px;">
+        <h2>Excel is the source of truth</h2>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;">
+          Every save writes <span class="mono" style="color:var(--accent);">CineWork-Data.xlsx</span> to your Google Drive;
+          every open reads it back. Google Calendar stays two-way &mdash; confirmed jobs as busy events, inquiries as tentative.
+        </p>
+        <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
+          <div class="status-pill" id="pill-drive"><span class="dot"></span><span>Drive not connected</span></div>
+          <div class="status-pill" id="pill-gcal"><span class="dot"></span><span>Calendar sync off</span></div>
+        </div>
+      </div>
+
+      <div class="panel" style="max-width:680px;">
+        <h3>Your details</h3>
+        <div class="form-grid">
+          <div class="form-group"><label>Your Name</label><input id="set-name" placeholder="e.g. Arjun Mehta"></div>
+          <div class="form-group"><label>Business / Trade Name</label><input id="set-biz" placeholder="e.g. Mehta Films"></div>
+          <div class="form-group"><label>Email</label><input id="set-email" type="email" placeholder="you@email.com"></div>
+          <div class="form-group"><label>Phone</label><input id="set-phone" placeholder="+91 98765 43210"></div>
+          <div class="form-group full"><label>Address</label><textarea id="set-address" rows="2" placeholder="Your city, state, country"></textarea></div>
+          <div class="form-group"><label>GSTIN / Tax No. (optional)</label><input id="set-gst" placeholder="GST or VAT number"></div>
+          <div class="form-group"><label>Default Currency</label>
+            <select id="set-currency">
+              <option value="&#8377;">&#8377; INR</option><option value="$">$ USD</option>
+              <option value="&#8364;">&#8364; EUR</option><option value="&#163;">&#163; GBP</option>
+              <option value="&#165;">&#165; JPY / CNY</option><option value="A$">A$ AUD</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Default Day Rate</label><input id="set-dayrate" type="number" placeholder="0"></div>
+          <div class="form-group full"><label>Default Invoice Terms / Notes</label><textarea id="set-terms" rows="3" placeholder="e.g. Payment due within 30 days. Thank you for your business."></textarea></div>
+          <div class="form-group"><label>Default Payment Due (days)</label><input id="set-due" type="number" value="30"></div>
+          <div class="form-group"><label>GST / Tax Rate %</label><input id="set-taxrate" type="number" placeholder="0" value="18"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+        </div>
+      </div>
+
+      <div class="panel" style="max-width:680px;">
+        <h3>Google Drive &amp; Calendar</h3>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Google OAuth Client ID</label>
+            <input id="set-drive-client-id" placeholder="xxxxxxx.apps.googleusercontent.com">
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5;">
+              One-time setup: go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> &rarr; create OAuth 2.0 Client ID (Web application) &rarr; add this page's URL to Authorized JavaScript origins &rarr; paste the Client ID here. Enable the Google Drive API in the same project.
+            </div>
+          </div>
+          <div class="form-group full">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);">
+              <input type="checkbox" id="set-autosync" style="width:auto;">
+              <span>Auto-sync on every save (recommended)</span>
+            </label>
+          </div>
+          <div class="form-group full">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);">
+              <input type="checkbox" id="set-gcalsync" style="width:auto;">
+              <span>Two-way sync with Google Calendar (primary)</span>
+            </label>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5;">
+              Confirmed jobs show as regular events; inquiries appear as tentative/transparent (they don't block other calendar users). Edits or deletions made directly in Google Calendar flow back into CineWork on next pull (app open + tab focus).
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveDriveSettings()">Save Drive settings</button>
+          <button class="btn btn-secondary" id="btn-connect-drive" onclick="connectDrive()">Connect Drive + Calendar</button>
+          <button class="btn btn-secondary" onclick="syncToDrive(true)">Sync Excel now &#8593;</button>
+          <button class="btn btn-secondary" onclick="loadFromDrive(true)">Reload from Drive &#8595;</button>
+          <button class="btn btn-secondary" onclick="syncAllToCalendar()">Push all to GCal &#8593;</button>
+          <button class="btn btn-secondary" onclick="pullFromCalendar(true)">Pull from GCal &#8595;</button>
+          <button class="btn btn-danger" onclick="disconnectDrive()">Disconnect</button>
+        </div>
+
+        <div style="margin-top:16px;padding:12px 16px;background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--radius);font-size:12.5px;color:var(--text2);" id="drive-status-box">
+          Status: <span id="drive-status-text" style="color:var(--text3);">Not connected</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<nav class="mobilebar">
+  <button class="mtab active" data-page="dashboard" onclick="navigate('dashboard')"><span class="mtab-mark">&#9687;</span>Today</button>
+  <button class="mtab" data-page="log" onclick="navigate('log')"><span class="mtab-mark">&#9636;</span>Work</button>
+  <button class="mtab" data-page="invoices" onclick="navigate('invoices')"><span class="mtab-mark">&#8377;</span>Money</button>
+  <button class="mtab" data-page="clients" onclick="navigate('clients')"><span class="mtab-mark">&#9678;</span>Clients</button>
+  <button class="mtab" data-page="settings" onclick="navigate('settings')"><span class="mtab-mark">&#9881;</span>More</button>
+</nav>
+
+<!-- LOG JOB MODAL -->
+<div class="modal-overlay" id="modal-log">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">New job</div>
+      <button class="modal-close" onclick="closeModal('log')">&#215;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Job / Project Name</label><input id="log-name" placeholder="e.g. Nike TVC Shoot"></div>
+      <div class="form-group"><label>Client</label>
+        <select id="log-client"><option value="">— Select client —</option></select>
+      </div>
+      <div class="form-group"><label>Days Worked</label><input id="log-days" type="number" min="1" step="1" value="1" oninput="rebuildJobDates(true)"></div>
+      <div class="form-group"><label>Job Type</label>
+        <select id="log-type">
+          <option>Commercial</option><option>Film</option><option>Documentary</option>
+          <option>Wedding</option><option>Event</option><option>Music Video</option>
+          <option>Corporate</option><option>Photography</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group full" id="log-dates-wrap"><!-- populated dynamically --></div>
+      <div class="form-group"><label>Day Rate (<span class="set-currency-display">&#8377;</span>)</label><input id="log-rate" type="number" placeholder="0"></div>
+      <div class="form-group"><label>Location</label><input id="log-location" placeholder="City or location"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="log-status"><option value="completed">Completed</option><option value="ongoing">Ongoing</option><option value="cancelled">Cancelled</option></select>
+      </div>
+      <div class="form-group"><!-- spacer --></div>
+      <div class="form-group full"><label>Notes</label><textarea id="log-notes" placeholder="Equipment, crew, special notes..."></textarea></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveLog()">Save job</button>
+      <button class="btn btn-secondary" onclick="closeModal('log')">Cancel</button>
+      <button class="btn btn-quiet" id="btn-cancel-job" onclick="toggleJobCancelled()" style="display:none;">Job fell through</button>
+      <button class="btn btn-danger" id="btn-delete-job" onclick="deleteJobFromModal()" style="display:none;">Delete job</button>
+    </div>
+    <div class="lock-note" id="job-lock-note" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- CLIENT MODAL -->
+<div class="modal-overlay" id="modal-client">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Production house</div>
+      <button class="modal-close" onclick="closeModal('client')">&#215;</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Client / Company Name</label><input id="cl-name" placeholder="e.g. Ogilvy India"></div>
+      <div class="form-group"><label>Contact Person</label><input id="cl-contact" placeholder="Full name"></div>
+      <div class="form-group"><label>Email</label><input id="cl-email" type="email" placeholder="contact@company.com"></div>
+      <div class="form-group"><label>Phone</label><input id="cl-phone" placeholder="+91 …"></div>
+      <div class="form-group full"><label>Address</label><textarea id="cl-address" rows="2" placeholder="Client's billing address"></textarea></div>
+      <div class="form-group"><label>GSTIN / Tax No.</label><input id="cl-gst" placeholder="Optional"></div>
+      <div class="form-group"><label>Industry</label>
+        <select id="cl-industry">
+          <option>Advertising</option><option>Production House</option><option>Event Management</option>
+          <option>Wedding</option><option>Music / Entertainment</option><option>Corporate</option>
+          <option>NGO</option><option>Direct Client</option><option>Other</option>
+        </select>
+      </div>
+    <div class="divider"></div>
+    <h3>Producers &amp; contacts</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">One house, many producers — add every contact you bill through.</p>
+    <div id="cl-contacts"></div>
+    <button class="btn btn-sm btn-quiet" onclick="addContactRow()" style="margin-top:4px;">+ Add contact</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveClient()">Save client</button>
+      <button class="btn btn-secondary" onclick="closeModal('client')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICE MODAL -->
+<div class="modal-overlay" id="modal-invoice">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <div class="modal-title">New invoice</div>
+      <button class="modal-close" onclick="closeModal('invoice')">&#215;</button>
+    </div>
+    <div class="form-grid" style="margin-bottom:20px;">
+      <div class="form-group"><label>Invoice Number</label><input id="inv-number" placeholder="Auto-generated"></div>
+      <div class="form-group"><label>Client</label><select id="inv-client"><option value="">— Select client —</option></select></div>
+      <div class="form-group"><label>Invoice Date</label><input id="inv-date" type="date"></div>
+      <div class="form-group"><label>Due Date</label><input id="inv-due" type="date"></div>
+      <div class="form-group"><label>Project / Reference</label><input id="inv-project" placeholder="Project name or PO number"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="inv-status"><option value="draft">Draft</option><option value="unpaid">Unpaid / Sent</option><option value="paid">Paid</option></select>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <h3 style="margin-bottom:12px;">Line Items</h3>
+    <div class="line-items-header">
+      <span>Description</span><span>Qty/Days</span>
+      <span>Rate (<span class="set-currency-display">&#8377;</span>)</span>
+      <span style="text-align:right">Total</span><span></span>
+    </div>
+    <div id="line-items-list"></div>
+    <button class="btn btn-sm btn-secondary" onclick="addLineItem()" style="margin-top:8px;">+ Add Line</button>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <div style="width:280px;">
+        <div class="inv-total-row"><span style="color:var(--text2)">Subtotal</span><span class="money" id="inv-subtotal">&#8377;0</span></div>
+        <div class="inv-total-row"><span style="color:var(--text2)">Tax (<span id="inv-tax-pct">18</span>%)</span><span class="money" id="inv-tax">&#8377;0</span></div>
+        <div class="inv-total-row grand"><span>Total</span><span class="money" id="inv-grand">&#8377;0</span></div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:20px;"><label>Notes / Terms</label><textarea id="inv-notes" rows="2"></textarea></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveInvoice()">Save invoice</button>
+      <button class="btn btn-secondary" onclick="closeModal('invoice')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICE VIEW MODAL -->
+<div class="modal-overlay" id="modal-view-invoice">
+  <div class="modal" style="max-width:780px;padding:24px;">
+    <div class="modal-header">
+      <div class="modal-title">Invoice Preview</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-sm btn-primary" onclick="printInvoice()">Print / PDF</button>
+        <button class="modal-close" onclick="closeModal('view-invoice')">&#215;</button>
+      </div>
+    </div>
+    <div id="invoice-preview-content"></div>
+  </div>
+</div>
+
+<!-- INQUIRY MODAL (short form — soft locks dates) -->
+<div class="modal-overlay" id="modal-inquiry">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="inq-modal-title">Hold dates</div>
+      <button class="modal-close" onclick="closeModal('inquiry')">&#215;</button>
+    </div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:20px;">Soft-lock these dates on your calendar until the project is confirmed.</p>
+    <div class="form-grid">
+      <div class="form-group full"><label>Project / Inquiry Name</label><input id="inq-name" placeholder="e.g. Puma campaign pitch"></div>
+      <div class="form-group"><label>Client (optional)</label>
+        <select id="inq-client"><option value="">— None / New —</option></select>
+      </div>
+      <div class="form-group"><label>Or type a name</label><input id="inq-client-text" placeholder="e.g. Puma India"></div>
+      <div class="form-group"><label>How many days?</label><input id="inq-days" type="number" min="1" step="1" value="1" oninput="rebuildInquiryDates(true)"></div>
+      <div class="form-group"><!-- spacer --></div>
+      <div class="form-group full" id="inq-dates-wrap"></div>
+      <div class="form-group full"><label>Notes</label><textarea id="inq-notes" rows="2" placeholder="Rate discussion, references, next steps..."></textarea></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveInquiry()">Hold these dates</button>
+      <button class="btn btn-secondary" id="btn-convert-inquiry" onclick="convertInquiryToJob()" style="display:none;">Confirm as job &#8594;</button>
+      <button class="btn btn-secondary" onclick="closeModal('inquiry')">Cancel</button>
+      <button class="btn btn-danger" id="btn-release-inquiry" onclick="releaseInquiry()" style="display:none;">Release dates</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR DAY MODAL -->
+<div class="modal-overlay" id="modal-cal-day">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title" id="cal-day-title">Jobs</div>
+      <button class="modal-close" onclick="closeModal('cal-day')">&#215;</button>
+    </div>
+    <div id="cal-day-list"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="closeModal('cal-day');openModal('log');">+ Log a job on this day</button>
+      <button class="btn btn-secondary" onclick="closeModal('cal-day')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────
+const DB = {
+  get: k => { try { return JSON.parse(localStorage.getItem('cw_'+k) || 'null'); } catch(e) { return null; } },
+  set: (k, v) => localStorage.setItem('cw_'+k, JSON.stringify(v))
+};
+
+let settings = DB.get('settings') || {
+  name:'', biz:'', email:'', phone:'', address:'', gst:'',
+  currency:'₹', dayrate:'',
+  terms:'Payment due within 30 days. Thank you for your business!',
+  due: 30, taxrate: 18
+};
+let clients  = DB.get('clients')  || [];
+let logs     = DB.get('logs')     || [];
+let inquiries = DB.get('inquiries') || [];
+let invoices = DB.get('invoices') || [];
+let editingLogId = null, editingClientId = null, editingInquiryId = null;
+
+// ── VIEW STATE (redesign) ────────────────────────────────────────────
+var calMode = 'month';
+var workFilter = 'all';
+var _decisionActions = [];
+var PAGE_META = {
+  dashboard: { title: 'Calendar',  sub: '' },
+  log:       { title: 'Work',      sub: 'Every inquiry, shoot and invoice on one thread' },
+  invoices:  { title: 'Money',     sub: 'Invoices follow the job — nothing typed twice' },
+  clients:   { title: 'Clients',   sub: '' },
+  analytics: { title: 'Insights',  sub: 'Where the money actually comes from' },
+  settings:  { title: 'Settings',  sub: 'Excel in Drive, two-way Google Calendar' }
+};
+var STAGE_META = {
+  inquiry:   { label: 'Inquiry',   cls: 'stage-inquiry' },
+  confirmed: { label: 'Confirmed', cls: 'stage-confirmed' },
+  shooting:  { label: 'Shooting',  cls: 'stage-shooting' },
+  shot:      { label: 'Shot',      cls: 'stage-shot' },
+  invoiced:  { label: 'Invoiced',  cls: 'stage-invoiced' },
+  paid:      { label: 'Paid',      cls: 'stage-paid' },
+  cancelled: { label: 'Cancelled', cls: 'stage-cancelled' }
+};
+var MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── SMALL HELPERS ────────────────────────────────────────────────────
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function cur() { return settings.currency || '₹'; }
+function fmtMoney(n) { return cur() + Math.round(+n || 0).toLocaleString(); }
+function shortMoney(n) {
+  n = Math.round(+n || 0);
+  if (cur() === '₹' && n >= 100000) return '₹' + (n / 100000).toFixed(n % 100000 === 0 ? 0 : 2).replace(/\.00$/, '') + 'L';
+  if (n >= 1000) return cur() + Math.round(n / 1000) + 'k';
+  return cur() + n;
+}
+function daysApart(a, b) {
+  if (!a || !b) return 0;
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+function itemDates(item) {
+  if (item && item.dates && item.dates.length) return item.dates.slice().sort();
+  if (!item || !item.date) return [];
+  return buildContiguousDates(item.date, Math.max(1, Math.ceil(item.days || 1)));
+}
+function dateRangeLabel(dates) {
+  if (!dates.length) return '—';
+  var a = new Date(dates[0]);
+  if (dates.length === 1) return pad2(a.getDate()) + ' ' + MON_SHORT[a.getMonth()];
+  var b = new Date(dates[dates.length - 1]);
+  if (a.getMonth() === b.getMonth()) return pad2(a.getDate()) + '–' + pad2(b.getDate()) + ' ' + MON_SHORT[a.getMonth()];
+  return pad2(a.getDate()) + ' ' + MON_SHORT[a.getMonth()] + ' – ' + pad2(b.getDate()) + ' ' + MON_SHORT[b.getMonth()];
+}
+function allWorkItems() {
+  var out = [];
+  logs.forEach(function(l) { out.push(Object.assign({}, l, { _kind: 'job' })); });
+  inquiries.forEach(function(i) { out.push(Object.assign({}, i, { _kind: 'inquiry', type: i.type || 'Inquiry' })); });
+  return out;
+}
+function clientNameOf(item) {
+  var c = clients.find(function(x) { return x.id === item.clientId; });
+  return c ? c.name : (item.clientName || '');
+}
+function jobInvoice(job) {
+  if (!job) return null;
+  var byId = invoices.find(function(i) { return i.jobId && i.jobId === job.id; });
+  if (byId) return byId;
+  var nm = (job.name || '').trim().toLowerCase();
+  if (!nm) return null;
+  return invoices.find(function(i) {
+    return i.clientId === job.clientId && (i.project || '').trim().toLowerCase() === nm;
+  }) || null;
+}
+function invoiceIsOverdue(inv) {
+  return inv && inv.status === 'unpaid' && inv.due && inv.due < todayIso();
+}
+function invoiceDisplayStatus(inv) { return invoiceIsOverdue(inv) ? 'overdue' : inv.status; }
+
+// Derive where a job/inquiry sits on the inquiry → shoot → invoice → paid thread.
+function stageOf(item) {
+  if (item._kind === 'inquiry') return 'inquiry';
+  if (item.status === 'cancelled') return 'cancelled';
+  var inv = jobInvoice(item);
+  if (inv) {
+    if (inv.status === 'paid') return 'paid';
+    if (inv.status === 'draft') return 'shot';
+    return 'invoiced';
+  }
+  if (item.status === 'ongoing') return 'shooting';
+  var dates = itemDates(item);
+  var last = dates.length ? dates[dates.length - 1] : item.date;
+  if (last && last > todayIso()) return 'confirmed';
+  return 'shot';
+}
+function nextActionOf(item, stage) {
+  var dates = itemDates(item), t = todayIso();
+  if (stage === 'inquiry') {
+    var age = item.createdAt ? daysApart(item.createdAt.slice(0, 10), t) : 0;
+    return age >= 5 ? 'No answer in ' + age + 'd' : 'Chase client';
+  }
+  if (stage === 'confirmed') {
+    var inDays = dates.length ? daysApart(t, dates[0]) : null;
+    if (!item.clientId && !item.clientName) return 'No client attached';
+    return inDays !== null && inDays <= 14 ? 'Prep · in ' + inDays + 'd' : 'Prep';
+  }
+  if (stage === 'shooting') {
+    var idx = dates.indexOf(t);
+    return idx >= 0 ? 'Day ' + (idx + 1) + ' of ' + dates.length : 'Wrap it';
+  }
+  if (stage === 'shot') {
+    var inv = jobInvoice(item);
+    return inv ? 'Draft — send it' : 'Raise invoice';
+  }
+  if (stage === 'invoiced') {
+    var iv = jobInvoice(item);
+    if (invoiceIsOverdue(iv)) return 'Overdue ' + daysApart(iv.due, t) + 'd';
+    return 'Awaiting payment';
+  }
+  return '';
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  var el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.nav-item, .mtab').forEach(function(n) {
+    n.classList.toggle('active', n.getAttribute('data-page') === page);
+  });
+  if (page === 'dashboard') { renderDashboard(); renderCalendar(); }
+  if (page === 'log')       renderWork();
+  if (page === 'invoices')  renderInvoices();
+  if (page === 'clients')   renderClients();
+  if (page === 'analytics') renderAnalytics();
+  if (page === 'settings')  { loadSettings(); updateStatusPills(); }
+  setTopbar(page);
+  updateNavCounts();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function currentPage() {
+  var el = document.querySelector('.page.active');
+  return el ? el.id.replace('page-', '') : 'dashboard';
+}
+function setTopbar(page) {
+  var meta = PAGE_META[page] || PAGE_META.dashboard;
+  var title = meta.title, sub = meta.sub;
+  if (page === 'dashboard') {
+    var m = monthStats(calCursor.getFullYear(), calCursor.getMonth());
+    title = MONTH_NAMES[calCursor.getMonth()] + ' ' + calCursor.getFullYear();
+    sub = m.bookedDays + ' day' + (m.bookedDays !== 1 ? 's' : '') + ' booked · ' +
+          m.heldDays + ' held · ' + fmtMoney(outstandingTotal()) + ' owed to you';
+  }
+  if (page === 'clients') {
+    var billed = invoices.filter(function(i) { return i.status === 'paid'; })
+      .reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+    sub = clients.length + ' client' + (clients.length !== 1 ? 's' : '') + ' · ' + fmtMoney(billed) + ' billed lifetime';
+  }
+  var t = document.getElementById('topbar-title');
+  var s = document.getElementById('topbar-sub');
+  if (t) t.textContent = title;
+  if (s) s.textContent = sub || '\u00a0';
+}
+function outstandingTotal() {
+  return invoices.filter(function(i) { return i.status === 'unpaid'; })
+    .reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+}
+function monthStats(y, m) {
+  var prefix = y + '-' + pad2(m + 1);
+  var bookedDays = 0, heldDays = 0, earned = 0, jobCount = 0;
+  logs.forEach(function(l) {
+    if (l.status === 'cancelled') return;
+    var d = itemDates(l).filter(function(x) { return x.indexOf(prefix) === 0; });
+    if (!d.length) return;
+    jobCount++;
+    bookedDays += d.length;
+    earned += d.length * (+l.rate || 0);
+  });
+  inquiries.forEach(function(i) {
+    heldDays += itemDates(i).filter(function(x) { return x.indexOf(prefix) === 0; }).length;
+  });
+  return { bookedDays: bookedDays, heldDays: heldDays, earned: earned, jobCount: jobCount };
+}
+function updateNavCounts() {
+  var m = monthStats(calCursor.getFullYear(), calCursor.getMonth());
+  var out = invoices.filter(function(i) { return i.status === 'unpaid'; }).length;
+  var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  set('count-dashboard', m.bookedDays + 'd');
+  set('count-log', String(logs.length + inquiries.length));
+  set('count-invoices', out ? out + ' out' : '');
+  set('count-clients', String(clients.length));
+  set('count-analytics', '');
+  var sub = document.getElementById('brand-sub');
+  if (sub) {
+    var city = (settings.address || '').split(/[,\n]/)[0].trim();
+    sub.textContent = settings.name ? (settings.name + (city ? ' · ' + city : '')) : 'Freelancer Studio';
+  }
+}
+function refreshActive() {
+  var p = currentPage();
+  if (p === 'dashboard') { renderDashboard(); renderCalendar(); }
+  if (p === 'log') renderWork();
+  if (p === 'invoices') renderInvoices();
+  if (p === 'clients') renderClients();
+  if (p === 'analytics') renderAnalytics();
+  setTopbar(p);
+  updateNavCounts();
+}
+
+// ── DASHBOARD: TODAY + DECISIONS ─────────────────────────────────────
+function renderDashboard() {
+  renderTodayCard();
+  renderDecisions();
+  updateNavCounts();
+  setTopbar('dashboard');
+}
+
+function renderTodayCard() {
+  var slot = document.getElementById('today-slot');
+  if (!slot) return;
+  var t = todayIso();
+  var live = logs.find(function(l) {
+    return l.status !== 'cancelled' && itemDates(l).indexOf(t) !== -1;
+  });
+  if (live) {
+    var dates = itemDates(live);
+    var idx = dates.indexOf(t) + 1;
+    var billable = (+live.days || dates.length) * (+live.rate || 0);
+    slot.innerHTML = '<div class="today-card">' +
+      '<div class="eyebrow">On today</div>' +
+      '<div class="today-title" style="margin-top:6px;">' + escapeHtml(live.name || 'Untitled') + '</div>' +
+      '<div class="today-meta">' + escapeHtml(clientNameOf(live) || 'Unassigned') +
+        ' · Day ' + idx + ' of ' + dates.length + (live.location ? ' · ' + escapeHtml(live.location) : '') + '</div>' +
+      '<div class="today-row">' +
+        '<span class="muted">' + escapeHtml(live.type || 'Shoot') + '</span>' +
+        '<span style="color:var(--accent);">' + fmtMoney(billable) + ' billable</span>' +
+      '</div>' +
+      '<div class="btn-group" style="margin-top:14px;">' +
+        '<button class="btn btn-primary" onclick="wrapAndInvoice(\'' + live.id + '\')">Wrap &amp; raise invoice</button>' +
+        '<button class="btn btn-quiet" onclick="editLog(\'' + live.id + '\')">Open job</button>' +
+      '</div></div>';
+    return;
+  }
+  var upcoming = allWorkItems().filter(function(i) {
+    if (i.status === 'cancelled') return false;
+    var d = itemDates(i);
+    return d.length && d[0] >= t;
+  }).sort(function(a, b) { return itemDates(a)[0] < itemDates(b)[0] ? -1 : 1; })[0];
+  if (!upcoming) { slot.innerHTML = ''; return; }
+  var start = itemDates(upcoming)[0];
+  var away = daysApart(t, start);
+  var isInq = upcoming._kind === 'inquiry';
+  slot.innerHTML = '<div class="today-card">' +
+    '<div class="eyebrow">' + (isInq ? 'Next hold' : 'Next up') + '</div>' +
+    '<div class="today-title" style="margin-top:6px;">' + escapeHtml(upcoming.name || 'Untitled') + '</div>' +
+    '<div class="today-meta">' + escapeHtml(clientNameOf(upcoming) || 'Unassigned') + ' · ' +
+      dateRangeLabel(itemDates(upcoming)) + ' · ' + (away === 0 ? 'today' : 'in ' + away + ' day' + (away !== 1 ? 's' : '')) + '</div>' +
+    '<div class="today-row">' +
+      '<span class="muted">' + escapeHtml(upcoming.type || 'Shoot') + '</span>' +
+      '<span style="color:' + (isInq ? 'var(--accent2)' : 'var(--accent)') + ';">' +
+        (isInq ? 'Held, not confirmed' : fmtMoney((+upcoming.days || 1) * (+upcoming.rate || 0)) + ' booked') + '</span>' +
+    '</div>' +
+    '<div class="btn-group" style="margin-top:14px;">' +
+      '<button class="btn ' + (isInq ? 'btn-hold' : 'btn-primary') + '" onclick="' +
+        (isInq ? 'editInquiry(\'' + upcoming.id + '\')' : 'editLog(\'' + upcoming.id + '\')') + '">' +
+        (isInq ? 'Confirm or release' : 'Open job') + '</button>' +
+    '</div></div>';
+}
+
+// Everything that is actually waiting on the user, ranked by urgency.
+function buildDecisions() {
+  var t = todayIso(), out = [];
+  if (!clients.length && !logs.length && !invoices.length) {
+    out.push({ name: 'Add your first client', note: 'Invoices bill to a client — start there', color: 'var(--accent)', run: function() { openModal('client'); } });
+    out.push({ name: 'Log your first job', note: 'Dates, day rate, location', color: 'var(--accent2)', run: function() { openModal('log'); } });
+    return out;
+  }
+  invoices.filter(invoiceIsOverdue).forEach(function(inv) {
+    out.push({
+      name: inv.project || inv.number,
+      note: fmtMoney(inv.total) + ' overdue ' + daysApart(inv.due, t) + ' days · ' + (clientNameOf(inv) || 'client'),
+      color: 'var(--red)',
+      run: function() { viewInvoice(inv.id); }
+    });
+  });
+  logs.forEach(function(l) {
+    if (l.status === 'cancelled') return;
+    var dates = itemDates(l);
+    var last = dates.length ? dates[dates.length - 1] : l.date;
+    if (!last || last >= t) return;
+    if (jobInvoice(l)) return;
+    out.push({
+      name: l.name || 'Untitled job',
+      note: 'Wrapped ' + dateRangeLabel(dates) + ' · no invoice raised',
+      color: 'var(--blue)',
+      run: function() { invoiceFromJob(l.id); }
+    });
+  });
+  var confirmedDates = {};
+  logs.forEach(function(l) {
+    if (l.status === 'cancelled') return;
+    itemDates(l).forEach(function(d) { confirmedDates[d] = l.name; });
+  });
+  inquiries.forEach(function(inq) {
+    var dates = itemDates(inq);
+    var last = dates.length ? dates[dates.length - 1] : inq.date;
+    var clash = dates.filter(function(d) { return confirmedDates[d]; })[0];
+    if (clash) {
+      out.push({
+        name: inq.name || 'Held dates',
+        note: 'Held ' + dateRangeLabel(dates) + ' · clashes with ' + confirmedDates[clash],
+        color: 'var(--red)',
+        run: function() { editInquiry(inq.id); }
+      });
+      return;
+    }
+    if (last && last < t) {
+      out.push({
+        name: inq.name || 'Held dates',
+        note: 'Held ' + dateRangeLabel(dates) + ' · passed, confirm or release',
+        color: 'var(--text3)',
+        run: function() { editInquiry(inq.id); }
+      });
+      return;
+    }
+    var age = inq.createdAt ? daysApart(inq.createdAt.slice(0, 10), t) : 0;
+    if (age >= 5) {
+      out.push({
+        name: inq.name || 'Held dates',
+        note: 'Held ' + dateRangeLabel(dates) + ' · no answer in ' + age + ' days',
+        color: 'var(--accent2)',
+        run: function() { editInquiry(inq.id); }
+      });
+    }
+  });
+  invoices.filter(function(i) { return i.status === 'draft'; }).forEach(function(inv) {
+    out.push({
+      name: inv.project || inv.number,
+      note: fmtMoney(inv.total) + ' drafted · not sent yet',
+      color: 'var(--accent)',
+      run: function() { viewInvoice(inv.id); }
+    });
+  });
+  logs.forEach(function(l) {
+    if (l.status === 'cancelled' || l.clientId || l.clientName) return;
+    var dates = itemDates(l);
+    if (!dates.length || dates[0] < t) return;
+    out.push({
+      name: l.name || 'Untitled job',
+      note: 'Confirmed ' + dateRangeLabel(dates) + ' · no client attached',
+      color: 'var(--accent)',
+      run: function() { editLog(l.id); }
+    });
+  });
+  return out.slice(0, 10);
+}
+function renderDecisions() {
+  var list = document.getElementById('decision-list');
+  var count = document.getElementById('decision-count');
+  if (!list) return;
+  _decisionActions = buildDecisions();
+  if (count) count.textContent = _decisionActions.length + ' open';
+  if (!_decisionActions.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:26px 10px;grid-column:1/-1;"><p>Nothing waiting on you. Enjoy the quiet.</p></div>';
+    return;
+  }
+  list.innerHTML = _decisionActions.map(function(d, i) {
+    return '<button class="decision" onclick="runDecision(' + i + ')">' +
+      '<span class="decision-dot" style="background:' + d.color + ';"></span>' +
+      '<span style="min-width:0;flex:1;">' +
+        '<span class="decision-name" style="display:block;">' + escapeHtml(d.name) + '</span>' +
+        '<span class="decision-note" style="display:block;">' + escapeHtml(d.note) + '</span>' +
+      '</span></button>';
+  }).join('');
+}
+function runDecision(i) {
+  var d = _decisionActions[i];
+  if (d && d.run) d.run();
+}
+
+// ── WORK ─────────────────────────────────────────────────────────────
+function setWorkFilter(stage) {
+  workFilter = stage;
+  document.querySelectorAll('#work-chips .chip').forEach(function(c) {
+    c.classList.toggle('active', c.getAttribute('data-stage') === stage);
+  });
+  renderWork();
+}
+function renderWork() {
+  var wrap = document.getElementById('work-rows');
+  if (!wrap) return;
+  var searchEl = document.getElementById('log-search');
+  var typeEl   = document.getElementById('log-filter-type');
+  var yearEl   = document.getElementById('log-filter-year');
+  var search = (searchEl ? searchEl.value : '').toLowerCase();
+  var typeF  = typeEl ? typeEl.value : '';
+  var yearF  = yearEl ? yearEl.value : '';
+
+  var items = allWorkItems();
+
+  if (yearEl) {
+    var years = [];
+    items.forEach(function(l) {
+      var y = (l.date || '').slice(0, 4);
+      if (y && years.indexOf(y) === -1) years.push(y);
+    });
+    years.sort().reverse();
+    var keep = yearEl.value;
+    yearEl.innerHTML = '<option value="">All years</option>' +
+      years.map(function(y) { return '<option' + (y === keep ? ' selected' : '') + '>' + y + '</option>'; }).join('');
+  }
+
+  var rows = items.filter(function(l) {
+    var txt = [l.name, clientNameOf(l), l.location, l.notes, l.type].join(' ').toLowerCase();
+    var stage = stageOf(l);
+    return (!search || txt.indexOf(search) !== -1) &&
+           (!typeF || l.type === typeF) &&
+           (!yearF || (l.date || '').indexOf(yearF) === 0) &&
+           (workFilter === 'all' || workFilter === stage);
+  }).sort(function(a, b) { return (b.date || '') < (a.date || '') ? -1 : 1; });
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9636;</div><p>Nothing here yet. Log a job or hold some dates.</p></div>';
+    updateNavCounts();
+    return;
+  }
+
+  wrap.innerHTML = rows.map(function(l) {
+    var isInq = l._kind === 'inquiry';
+    var stage = stageOf(l);
+    var meta  = STAGE_META[stage];
+    var dates = itemDates(l);
+    var dayCount = isInq ? (dates.length || l.days || 1) : (+l.days || dates.length || 1);
+    var value = isInq ? '—' : fmtMoney(dayCount * (+l.rate || 0));
+    var editFn = isInq ? 'editInquiry' : 'editLog';
+    var delFn  = isInq ? 'deleteInquiry' : 'deleteLog';
+    var extra = '';
+    if (dates.length > 1 && !areDatesContiguous(dates)) extra = ' <span style="color:var(--accent);font-size:10px;">split</span>';
+    var invoiceBtn = (!isInq && (stage === 'shot' || stage === 'shooting'))
+      ? '<button class="mini" title="Generate invoice" onclick="event.stopPropagation();invoiceFromJob(\'' + l.id + '\')">&#8377;</button>' : '';
+    var lockInv = isInq ? null : jobInvoice(l);
+    var delTitle = isInq ? 'Release these dates' : 'Delete job';
+    var lastBtn = lockInv
+      ? '<button class="mini" title="Invoice ' + escapeHtml(lockInv.number) + ' raised — job is locked" onclick="event.stopPropagation();viewInvoice(\'' + lockInv.id + '\')">&#128274;</button>'
+      : '<button class="mini danger" title="' + delTitle + '" onclick="event.stopPropagation();' + delFn + '(\'' + l.id + '\')">&#215;</button>';
+    return '<div class="row work-cols" onclick="' + editFn + '(\'' + l.id + '\')">' +
+      '<div style="min-width:0;">' +
+        '<div class="row-name">' + escapeHtml(l.name || 'Untitled') + '</div>' +
+        '<div class="row-sub">' + escapeHtml(l.type || (isInq ? 'Inquiry' : 'Job')) + (l.location ? ' · ' + escapeHtml(l.location) : '') + '</div>' +
+      '</div>' +
+      '<div class="row-dim col-client">' + escapeHtml(clientNameOf(l) || '—') + '</div>' +
+      '<div class="row-mono col-dates">' + dateRangeLabel(dates) + '</div>' +
+      '<div class="row-mono col-days">' + dayCount + 'd' + extra + '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;min-width:0;">' +
+        '<span class="stage ' + meta.cls + '">' + meta.label + '</span>' +
+        '<span class="row-next">' + escapeHtml(nextActionOf(l, stage)) + '</span>' +
+      '</div>' +
+      '<div class="row-value">' + value + '</div>' +
+      '<div class="row-actions col-actions">' + invoiceBtn +
+        lastBtn +
+      '</div>' +
+    '</div>';
+  }).join('');
+  updateNavCounts();
+}
+function renderLog() { renderWork(); }
+
+// ── MONEY ────────────────────────────────────────────────────────────
+function filterInvoices(status, el) {
+  invoiceFilter = status;
+  document.querySelectorAll('#inv-chips .chip').forEach(function(c) {
+    c.classList.toggle('active', c.getAttribute('data-status') === status);
+  });
+  renderInvoices();
+}
+function renderMoneyStats() {
+  var box = document.getElementById('money-stats');
+  if (!box) return;
+  var year = new Date().getFullYear();
+  var unpaid  = invoices.filter(function(i) { return i.status === 'unpaid'; });
+  var overdue = unpaid.filter(invoiceIsOverdue);
+  var drafts  = invoices.filter(function(i) { return i.status === 'draft'; });
+  var paidYr  = invoices.filter(function(i) { return i.status === 'paid' && (i.date || '').indexOf(String(year)) === 0; });
+  var owedSum = unpaid.reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+  var overSum = overdue.reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+  var draftSum = drafts.reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+  var collected = paidYr.reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+  var payLags = invoices.filter(function(i) { return i.status === 'paid' && i.paidAt && i.date; })
+    .map(function(i) { return daysApart(i.date, i.paidAt.slice(0, 10)); }).filter(function(n) { return n >= 0; });
+  var avgLag = payLags.length ? Math.round(payLags.reduce(function(a, b) { return a + b; }, 0) / payLags.length) : null;
+  var oldestOverdue = overdue.slice().sort(function(a, b) { return a.due < b.due ? -1 : 1; })[0];
+
+  var cards = [
+    { cls: 'gold', label: 'Owed to you', value: fmtMoney(owedSum), sub: unpaid.length + ' invoice' + (unpaid.length !== 1 ? 's' : '') + ' out' },
+    { cls: overSum ? 'red' : '', label: 'Overdue', value: fmtMoney(overSum),
+      sub: overdue.length ? overdue.length + ' invoice' + (overdue.length !== 1 ? 's' : '') + ' · ' + daysApart(oldestOverdue.due, todayIso()) + ' days late' : 'nothing late' },
+    { cls: '', label: 'Draft, not sent', value: fmtMoney(draftSum), sub: drafts.length ? (drafts[0].project || drafts[0].number) : 'no drafts' },
+    { cls: '', label: 'Collected ' + year, value: fmtMoney(collected), sub: avgLag !== null ? 'avg ' + avgLag + ' days to pay' : paidYr.length + ' paid this year' }
+  ];
+  box.innerHTML = cards.map(function(c) {
+    return '<div class="stat-card ' + c.cls + '">' +
+      '<div class="stat-label">' + c.label + '</div>' +
+      '<div class="stat-value">' + c.value + '</div>' +
+      '<div class="stat-sub">' + c.sub + '</div></div>';
+  }).join('');
+}
+function renderInvoices() {
+  renderMoneyStats();
+  var wrap = document.getElementById('invoice-rows');
+  if (!wrap) return;
+  var list = invoices.map(function(inv) {
+    return Object.assign({}, inv, { displayStatus: invoiceDisplayStatus(inv) });
+  });
+  if (invoiceFilter !== 'all') list = list.filter(function(i) { return i.displayStatus === invoiceFilter; });
+  list.sort(function(a, b) { return (b.createdAt || '') < (a.createdAt || '') ? -1 : 1; });
+
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#8377;</div><p>No invoices here yet.</p></div>';
+    updateNavCounts();
+    return;
+  }
+  var bMap = { paid: 'badge-paid', unpaid: 'badge-unpaid', overdue: 'badge-overdue', draft: 'badge-draft' };
+  wrap.innerHTML = list.map(function(inv) {
+    var c = inv.currency || cur();
+    return '<div class="row money-cols" onclick="viewInvoice(\'' + inv.id + '\')">' +
+      '<span class="row-mono col-number" style="color:var(--accent);">' + escapeHtml(inv.number || '—') + '</span>' +
+      '<span class="row-name">' + escapeHtml(inv.project || '—') + '</span>' +
+      '<span class="row-dim col-client">' + escapeHtml(clientNameOf(inv) || '—') + '</span>' +
+      '<span class="row-mono col-due">' + (inv.due || '—') + '</span>' +
+      '<span><span class="badge ' + (bMap[inv.displayStatus] || 'badge-draft') + '">' + inv.displayStatus + '</span></span>' +
+      '<span class="row-value">' + c + Math.round(+inv.total || 0).toLocaleString() + '</span>' +
+      '<span class="row-actions col-actions">' +
+        (inv.status !== 'paid' ? '<button class="mini" title="Mark paid" onclick="event.stopPropagation();markPaid(\'' + inv.id + '\')">&#10003;</button>' : '') +
+        '<button class="mini danger" title="Delete" onclick="event.stopPropagation();deleteInvoice(\'' + inv.id + '\')">&#215;</button>' +
+      '</span>' +
+    '</div>';
+  }).join('');
+  updateNavCounts();
+}
+function markPaid(id) {
+  var inv = invoices.find(function(x) { return x.id === id; });
+  if (!inv) return;
+  inv.status = 'paid';
+  inv.paidAt = new Date().toISOString();
+  save();
+  refreshActive();
+  toast('Marked as paid!');
+}
+
+// Job → invoice, prefilled. "Nothing typed twice."
+function invoiceFromJob(jobId) {
+  var job = logs.find(function(l) { return l.id === jobId; });
+  if (!job) { toast('Job not found', 'error'); return; }
+  var existing = jobInvoice(job);
+  if (existing) { viewInvoice(existing.id); return; }
+  openModal('invoice');
+  var dates = itemDates(job);
+  var dayCount = +job.days || dates.length || 1;
+  var lastDate = dates.length ? dates[dates.length - 1] : (job.date || todayIso());
+  document.getElementById('inv-client').value = job.clientId || '';
+  document.getElementById('inv-project').value = job.name || '';
+  document.getElementById('inv-date').value = lastDate;
+  document.getElementById('inv-due').value =
+    new Date(new Date(lastDate).getTime() + (settings.due || 30) * 86400000).toISOString().slice(0, 10);
+  document.getElementById('inv-status').value = 'unpaid';
+  lineItems = [{
+    desc: (job.type || 'Shoot') + ' — ' + (job.name || 'Job') + ' (' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ')',
+    qty: dayCount,
+    rate: +job.rate || settings.dayrate || 0
+  }];
+  renderLineItems();
+  window._invoiceJobId = job.id;
+  if (!job.clientId) toast('Pick a client for this invoice', 'error');
+}
+function wrapAndInvoice(jobId) {
+  var job = logs.find(function(l) { return l.id === jobId; });
+  if (!job) return;
+  if (job.status === 'ongoing') { job.status = 'completed'; save(); }
+  invoiceFromJob(jobId);
+}
+
+// ── CLIENTS ──────────────────────────────────────────────────────────
+function clientContacts(c) {
+  if (c.contacts && c.contacts.length) return c.contacts;
+  if (c.contact) return [{ name: c.contact, role: c.email || c.phone || 'Contact' }];
+  return [];
+}
+function clientStats(c) {
+  var jobsFor = logs.filter(function(l) { return l.clientId === c.id; });
+  var invFor  = invoices.filter(function(i) { return i.clientId === c.id; });
+  var billed  = invFor.filter(function(i) { return i.status === 'paid'; })
+    .reduce(function(s, i) { return s + (+i.total || 0); }, 0);
+  var lags = invFor.filter(function(i) { return i.status === 'paid' && i.paidAt && i.date; })
+    .map(function(i) { return daysApart(i.date, i.paidAt.slice(0, 10)); }).filter(function(n) { return n >= 0; });
+  var avg = lags.length ? Math.round(lags.reduce(function(a, b) { return a + b; }, 0) / lags.length) : null;
+  var tier = 'New', tierCls = 'tier-new';
+  if (avg !== null && avg > 45) { tier = 'Slow payer'; tierCls = 'tier-slow'; }
+  else if (jobsFor.length >= 5) { tier = 'Anchor'; tierCls = 'tier-anchor'; }
+  else if (jobsFor.length >= 2) { tier = 'Growing'; tierCls = 'tier-growing'; }
+  return { jobs: jobsFor.length, billed: billed, avg: avg, tier: tier, tierCls: tierCls,
+    outstanding: invFor.filter(function(i) { return i.status === 'unpaid'; }).length };
+}
+function renderClients() {
+  var g = document.getElementById('clients-grid');
+  if (!g) return;
+  var addCard = '<button class="add-card" onclick="openModal(\'client\')">' +
+    '<span class="plus">+</span>Add a production house' +
+    '<span class="hint">One house, many producers — add every contact you bill through</span></button>';
+  g.innerHTML = addCard + clients.map(function(c) {
+    var st = clientStats(c);
+    var people = clientContacts(c);
+    return '<div class="client-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+        '<div style="min-width:0;">' +
+          '<div class="client-name">' + escapeHtml(c.name) + '</div>' +
+          '<div class="client-meta">' + escapeHtml(c.industry || 'Client') +
+            (c.address ? ' · ' + escapeHtml(c.address.split(/[,\n]/)[0]) : '') +
+            ' · ' + people.length + ' contact' + (people.length !== 1 ? 's' : '') + '</div>' +
+        '</div>' +
+        '<span class="tier ' + st.tierCls + '">' + st.tier + '</span>' +
+      '</div>' +
+      '<div class="client-stats">' +
+        '<div><div class="client-stat-val" style="color:var(--accent);">' + shortMoney(st.billed) + '</div><div class="client-stat-label">Billed</div></div>' +
+        '<div><div class="client-stat-val">' + st.jobs + '</div><div class="client-stat-label">Jobs</div></div>' +
+        '<div><div class="client-stat-val" style="color:' + (st.avg !== null && st.avg > 45 ? 'var(--red)' : 'var(--text)') + ';">' +
+          (st.avg !== null ? st.avg + ' days' : '—') + '</div><div class="client-stat-label">Pays in</div></div>' +
+      '</div>' +
+      '<div style="height:1px;background:var(--line);"></div>' +
+      (people.length
+        ? '<div class="contact-list">' + people.map(function(p) {
+            return '<div class="contact"><div style="min-width:0;">' +
+              '<div class="contact-name">' + escapeHtml(p.name || '—') + '</div>' +
+              '<div class="contact-role">' + escapeHtml(p.role || 'Contact') + '</div></div></div>';
+          }).join('') + '</div>'
+        : '<div class="faint" style="font-size:12px;">No contacts yet — add the producers you bill through.</div>') +
+      '<div style="display:flex;gap:8px;margin-top:auto;">' +
+        '<button class="btn btn-sm btn-quiet" style="flex:1;" onclick="editClient(\'' + c.id + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-quiet" style="flex:1;" onclick="openModal(\'log\');document.getElementById(\'log-client\').value=\'' + c.id + '\'">Log job</button>' +
+        '<button class="btn btn-sm" style="flex:1;border:1px solid var(--line-gold);background:var(--accent-faint);color:var(--accent);" onclick="openModal(\'invoice\');document.getElementById(\'inv-client\').value=\'' + c.id + '\'">Invoice</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  updateNavCounts();
+}
+
+// ── CLIENT MODAL (multiple producers per house) ──────────────────────
+var clientContactDraft = [];
+function renderContactRows() {
+  var box = document.getElementById('cl-contacts');
+  if (!box) return;
+  if (!clientContactDraft.length) clientContactDraft = [{ name: '', role: '' }];
+  box.innerHTML = clientContactDraft.map(function(p, i) {
+    return '<div class="contact-row">' +
+      '<input placeholder="Name" value="' + escapeHtml(p.name || '') + '" oninput="clientContactDraft[' + i + '].name=this.value">' +
+      '<input placeholder="Role (e.g. Producer)" value="' + escapeHtml(p.role || '') + '" oninput="clientContactDraft[' + i + '].role=this.value">' +
+      '<button class="remove-line" onclick="removeContactRow(' + i + ')">&#215;</button>' +
+    '</div>';
+  }).join('');
+}
+function addContactRow() { clientContactDraft.push({ name: '', role: '' }); renderContactRows(); }
+function removeContactRow(i) { clientContactDraft.splice(i, 1); renderContactRows(); }
+
+function prepareClientModal() {
+  ['name', 'contact', 'email', 'phone', 'address', 'gst'].forEach(function(k) {
+    var el = document.getElementById('cl-' + k);
+    if (el) el.value = '';
+  });
+  document.getElementById('cl-industry').value = 'Advertising';
+  clientContactDraft = [{ name: '', role: '' }];
+  renderContactRows();
+  editingClientId = null;
+}
+function saveClient() {
+  var name = document.getElementById('cl-name').value.trim();
+  if (!name) { toast('Client name is required', 'error'); return; }
+  var people = clientContactDraft.filter(function(p) { return (p.name || '').trim(); })
+    .map(function(p) { return { name: p.name.trim(), role: (p.role || '').trim() }; });
+  var c = {
+    id:        editingClientId || String(Date.now()),
+    name:      name,
+    contact:   document.getElementById('cl-contact').value,
+    email:     document.getElementById('cl-email').value,
+    phone:     document.getElementById('cl-phone').value,
+    address:   document.getElementById('cl-address').value,
+    gst:       document.getElementById('cl-gst').value,
+    industry:  document.getElementById('cl-industry').value,
+    contacts:  people,
+    createdAt: new Date().toISOString()
+  };
+  if (editingClientId) {
+    var i = clients.findIndex(function(x) { return x.id === editingClientId; });
+    clients[i] = Object.assign({}, clients[i], c);
+  } else {
+    clients.push(c);
+  }
+  save();
+  closeModal('client');
+  renderClients();
+  populateClientDropdowns();
+  toast('Client saved!');
+}
+function editClient(id) {
+  var c = clients.find(function(x) { return x.id === id; });
+  if (!c) return;
+  editingClientId = id;
+  ['name', 'contact', 'email', 'phone', 'address', 'gst'].forEach(function(k) {
+    var el = document.getElementById('cl-' + k);
+    if (el) el.value = c[k] || '';
+  });
+  document.getElementById('cl-industry').value = c.industry || 'Advertising';
+  clientContactDraft = clientContacts(c).map(function(p) { return { name: p.name, role: p.role }; });
+  if (!clientContactDraft.length) clientContactDraft = [{ name: '', role: '' }];
+  renderContactRows();
+  document.getElementById('modal-client').classList.add('open');
+}
+
+// ── STATUS PILLS ─────────────────────────────────────────────────────
+function updateSyncStatus(txt) {
+  var dot = document.getElementById('sync-dot');
+  var label = document.getElementById('sync-label');
+  var box = document.getElementById('drive-status-text');
+  var color = 'var(--text3)';
+  var text = txt || 'Not connected';
+  if (!txt) {
+    if (driveState.syncing) { text = 'Syncing…'; color = 'var(--accent)'; }
+    else if (driveState.connected) {
+      text = driveState.lastSync ? 'Drive synced ' + new Date(driveState.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Drive connected';
+      color = 'var(--green)';
+    }
+    else if (!settings.driveClientId) text = 'Drive not configured';
+    else text = 'Drive not connected';
+  } else {
+    if (/error|fail/i.test(txt)) color = 'var(--red)';
+    else if (/sync|load/i.test(txt)) color = 'var(--accent)';
+    else if (/connect|synced/i.test(txt)) color = 'var(--green)';
+  }
+  if (dot) dot.style.background = color;
+  if (label) label.textContent = text;
+  if (box) { box.textContent = text; box.style.color = color; }
+
+  var gDot = document.getElementById('gcal-dot');
+  var gLabel = document.getElementById('gcal-label');
+  var gcalOn = driveState.connected && settings.gcalSync !== false;
+  if (gDot) gDot.style.background = gcalOn ? 'var(--blue)' : 'var(--text3)';
+  if (gLabel) gLabel.textContent = gcalOn ? 'GCal two-way on' : 'Calendar sync off';
+  updateStatusPills(text, color);
+}
+function updateStatusPills(text, color) {
+  var drive = document.getElementById('pill-drive');
+  var gcal = document.getElementById('pill-gcal');
+  if (drive) {
+    drive.classList.toggle('on', !!driveState.connected);
+    drive.lastElementChild.textContent = text || (driveState.connected ? 'Drive connected' : 'Drive not connected');
+  }
+  if (gcal) {
+    var on = driveState.connected && settings.gcalSync !== false;
+    gcal.classList.toggle('on', !!on);
+    gcal.lastElementChild.textContent = on ? 'Calendar two-way sync on' : 'Calendar sync off';
+  }
+}
+
+// ── CALENDAR ─────────────────────────────────────────────────────────
+function setCalMode(mode) {
+  calMode = mode;
+  document.querySelectorAll('.segment .pill').forEach(function(p) {
+    p.classList.toggle('active', p.getAttribute('data-mode') === mode);
+  });
+  renderCalendar();
+}
+function calEventClass(item) {
+  if (item._kind === 'inquiry') return 'inquiry';
+  var stage = stageOf(item);
+  if (stage === 'cancelled') return 'cancelled';
+  if (stage === 'shooting') return 'ongoing';
+  if (stage === 'paid') return 'paid';
+  return '';
+}
+function itemsByDate() {
+  var map = {};
+  var push = function(key, obj) { (map[key] = map[key] || []).push(obj); };
+  logs.forEach(function(l) {
+    var dates = itemDates(l);
+    var fr = l.dayFractions || [];
+    dates.forEach(function(d, i) {
+      push(d, Object.assign({}, l, { _kind: 'job', _spanIndex: i, _spanTotal: dates.length, _isHalfDay: fr[i] === 0.5 }));
+    });
+  });
+  inquiries.forEach(function(inq) {
+    var dates = itemDates(inq);
+    var fr = inq.dayFractions || [];
+    dates.forEach(function(d, i) {
+      push(d, Object.assign({}, inq, { _kind: 'inquiry', _spanIndex: i, _spanTotal: dates.length, _isHalfDay: fr[i] === 0.5 }));
+    });
+  });
+  return map;
+}
+function renderCalendar() {
+  var year = calCursor.getFullYear(), month = calCursor.getMonth();
+  var titleEl = document.getElementById('cal-title');
+  if (titleEl) titleEl.textContent = calMode === 'year' ? String(year) : MONTH_NAMES[month] + ' ' + year;
+
+  var grid = document.getElementById('cal-grid');
+  var weeksEl = document.getElementById('cal-weeks');
+  var yearEl = document.getElementById('cal-year');
+  var legend = document.getElementById('cal-legend');
+  if (grid) grid.style.display = calMode === 'month' ? '' : 'none';
+  if (weeksEl) weeksEl.style.display = calMode === 'weeks' ? '' : 'none';
+  if (yearEl) yearEl.style.display = calMode === 'year' ? '' : 'none';
+  if (legend) legend.style.display = calMode === 'month' ? '' : 'none';
+
+  if (calMode === 'month') renderCalMonth(year, month);
+  if (calMode === 'weeks') renderCalWeeks(year, month);
+  if (calMode === 'year')  renderCalYear(year);
+
+  var m = monthStats(year, month);
+  var sum = document.getElementById('cal-summary');
+  if (sum) {
+    sum.textContent = calMode === 'year'
+      ? year + ' so far · ' + yearStats(year).days + ' shoot days · ' + fmtMoney(yearStats(year).earned)
+      : m.jobCount + ' job' + (m.jobCount !== 1 ? 's' : '') + ' · ' + m.bookedDays + ' shoot day' + (m.bookedDays !== 1 ? 's' : '') +
+        ' · ' + fmtMoney(m.earned) + ' this month' +
+        (m.heldDays ? ' · ' + m.heldDays + ' day' + (m.heldDays !== 1 ? 's' : '') + ' soft-locked' : '');
+  }
+  setTopbar(currentPage());
+  updateNavCounts();
+}
+function renderCalMonth(year, month) {
+  var grid = document.getElementById('cal-grid');
+  if (!grid) return;
+  var byDate = itemsByDate();
+  var t = todayIso();
+  var firstDow = new Date(year, month, 1).getDay();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var prevMonthDays = new Date(year, month, 0).getDate();
+  var html = '';
+  DOW_NAMES.forEach(function(d) { html += '<div class="cal-dow">' + d + '</div>'; });
+
+  var totalCells = (firstDow + daysInMonth) > 35 ? 42 : 35;
+  for (var i = 0; i < totalCells; i++) {
+    var dayNum, cellY = year, cellM = month, otherMonth = false;
+    if (i < firstDow) {
+      dayNum = prevMonthDays - firstDow + 1 + i; cellM = month - 1; otherMonth = true;
+      if (cellM < 0) { cellM = 11; cellY--; }
+    } else if (i >= firstDow + daysInMonth) {
+      dayNum = i - firstDow - daysInMonth + 1; cellM = month + 1; otherMonth = true;
+      if (cellM > 11) { cellM = 0; cellY++; }
+    } else {
+      dayNum = i - firstDow + 1;
+    }
+    var key = dateKey(cellY, cellM, dayNum);
+    var dayItems = byDate[key] || [];
+    html += '<div class="cal-cell' + (otherMonth ? ' other-month' : '') + (key === t ? ' today' : '') +
+            '" onclick="calOpenDay(\'' + key + '\')">' +
+            '<div class="cal-daynum">' + dayNum + '</div>';
+    dayItems.slice(0, 2).forEach(function(job) {
+      var editFn = job._kind === 'inquiry' ? 'editInquiry' : 'editLog';
+      var label = (job._isHalfDay ? '½ ' : '') + escapeHtml(job.name || 'Untitled');
+      var span = job._spanTotal > 1 ? ' (' + (job._spanIndex + 1) + '/' + job._spanTotal + ')' : '';
+      html += '<div class="cal-event ' + calEventClass(job) + '" title="' + label + span +
+        '" onclick="event.stopPropagation();' + editFn + '(\'' + job.id + '\')">' + label + span + '</div>';
+    });
+    if (dayItems.length > 2) {
+      html += '<div class="cal-more" onclick="event.stopPropagation();calOpenDay(\'' + key + '\')">+' + (dayItems.length - 2) + ' more</div>';
+    }
+    html += '</div>';
+  }
+  grid.innerHTML = html;
+}
+function renderCalWeeks(year, month) {
+  var box = document.getElementById('cal-weeks');
+  if (!box) return;
+  var firstDow = new Date(year, month, 1).getDay();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var weekCount = Math.ceil((firstDow + daysInMonth) / 7);
+  var items = allWorkItems();
+  var html = '';
+  for (var w = 0; w < weekCount; w++) {
+    var start = new Date(year, month, 1 + w * 7 - firstDow);
+    var end = new Date(start); end.setDate(start.getDate() + 6);
+    var keys = [];
+    for (var k = 0; k < 7; k++) {
+      var d = new Date(start); d.setDate(start.getDate() + k);
+      keys.push(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+    }
+    var inWeek = items.filter(function(it) {
+      return itemDates(it).some(function(d) { return keys.indexOf(d) !== -1; });
+    });
+    var load = inWeek.filter(function(it) { return it._kind === 'job' && it.status !== 'cancelled'; })
+      .reduce(function(a, it) { return a + itemDates(it).filter(function(d) { return keys.indexOf(d) !== -1; }).length; }, 0);
+    html += '<div class="week-row">' +
+      '<div><div class="week-range">' + start.getDate() + ' – ' + end.getDate() + ' ' + MON_SHORT[end.getMonth()] + '</div>' +
+      '<div class="week-load">' + (load ? load + ' booked' : 'open') + '</div></div>' +
+      '<div class="week-items">' +
+      (inWeek.length ? inWeek.map(function(it) {
+        var isInq = it._kind === 'inquiry';
+        var dcount = itemDates(it).filter(function(d) { return keys.indexOf(d) !== -1; }).length;
+        var editFn = isInq ? 'editInquiry' : 'editLog';
+        var stage = stageOf(it);
+        var color = stage === 'shooting' ? 'var(--blue)' : stage === 'paid' ? 'var(--green)' : stage === 'cancelled' ? 'var(--text3)' : 'var(--accent)';
+        return '<div class="week-item' + (isInq ? ' inquiry' : '') + '"' + (isInq ? '' : ' style="border-left-color:' + color + ';"') +
+          ' onclick="' + editFn + '(\'' + it.id + '\')">' +
+          '<span class="wi-days">' + dcount + 'd</span>' +
+          '<span class="wi-name">' + escapeHtml(it.name || 'Untitled') + ' · ' + escapeHtml(clientNameOf(it) || 'Unassigned') + '</span>' +
+          '<span class="wi-amt">' + (isInq ? 'held' : shortMoney(dcount * (+it.rate || 0))) + '</span>' +
+        '</div>';
+      }).join('') : '<div class="week-empty">Nothing booked — good week to chase leads.</div>') +
+      '</div></div>';
+  }
+  box.innerHTML = html;
+}
+function yearStats(year) {
+  var days = 0, earned = 0;
+  logs.forEach(function(l) {
+    if (l.status === 'cancelled') return;
+    var d = itemDates(l).filter(function(x) { return x.indexOf(String(year)) === 0; });
+    days += d.length;
+    earned += d.length * (+l.rate || 0);
+  });
+  return { days: days, earned: earned };
+}
+function renderCalYear(year) {
+  var box = document.getElementById('cal-year');
+  if (!box) return;
+  var byDate = itemsByDate();
+  var now = new Date();
+  var html = '';
+  for (var m = 0; m < 12; m++) {
+    var daysInMonth = new Date(year, m + 1, 0).getDate();
+    var pips = '', earned = 0, booked = 0, held = 0;
+    for (var d = 1; d <= daysInMonth; d++) {
+      var key = dateKey(year, m, d);
+      var its = byDate[key] || [];
+      var cls = '';
+      if (its.length) {
+        var job = its.find(function(x) { return x._kind === 'job' && x.status !== 'cancelled'; });
+        if (job) {
+          var stage = stageOf(job);
+          cls = stage === 'shooting' ? 'shooting' : stage === 'paid' ? 'paid' : 'booked';
+          booked++;
+          earned += (+job.rate || 0);
+        } else if (its.some(function(x) { return x._kind === 'inquiry'; })) {
+          cls = 'held'; held++;
+        }
+      }
+      pips += '<span class="pip ' + cls + '"></span>';
+    }
+    html += '<div class="year-cell' + (year === now.getFullYear() && m === now.getMonth() ? ' current' : '') +
+      '" onclick="calGoMonth(' + year + ',' + m + ')">' +
+      '<div class="year-head"><span class="year-name">' + MON_SHORT[m] + '</span>' +
+      '<span class="year-earn">' + (earned ? shortMoney(earned) : '—') + '</span></div>' +
+      '<div class="pips">' + pips + '</div>' +
+      '<div class="year-sub">' + (booked ? booked + ' booked' : 'open') + (held ? ' · ' + held + ' held' : '') + '</div>' +
+    '</div>';
+  }
+  box.innerHTML = html;
+}
+function calGoMonth(y, m) {
+  calCursor = new Date(y, m, 1);
+  setCalMode('month');
+}
+
+// ── RELEASING & DELETING FROM THE EDIT MODALS ────────────────────────
+function jobLockedBy(jobId) {
+  var job = logs.find(function(l) { return l.id === jobId; });
+  return job ? jobInvoice(job) : null;
+}
+function applyJobLock(job) {
+  var inv = job ? jobInvoice(job) : null;
+  var delBtn = document.getElementById('btn-delete-job');
+  var fellBtn = document.getElementById('btn-cancel-job');
+  var note = document.getElementById('job-lock-note');
+  if (delBtn) delBtn.style.display = inv ? 'none' : '';
+  if (fellBtn) {
+    fellBtn.style.display = (inv && inv.status === 'paid') ? 'none' : '';
+    fellBtn.textContent = job && job.status === 'cancelled' ? 'Restore job' : 'Job fell through';
+  }
+  if (note) {
+    if (inv) {
+      note.style.display = '';
+      note.innerHTML = '<span class="lock-mark">&#128274;</span><span>Invoice <b>' + escapeHtml(inv.number) + '</b> (' +
+        invoiceDisplayStatus(inv) + ') is raised against this job, so it can\'t be deleted — the billing record has to stay put. ' +
+        'Delete the invoice in Money first if you really need this gone.' +
+        '</span><button class="btn btn-sm btn-quiet" onclick="closeModal(\'log\');viewInvoice(\'' + inv.id + '\')">Open invoice</button>';
+    } else {
+      note.style.display = 'none';
+      note.innerHTML = '';
+    }
+  }
+}
+function deleteJobFromModal() {
+  var id = editingLogId;
+  if (!id) { closeModal('log'); return; }
+  var locked = jobLockedBy(id);
+  if (locked) {
+    toast('Invoice ' + locked.number + ' is raised — delete that first', 'error');
+    return;
+  }
+  var job = logs.find(function(l) { return l.id === id; });
+  if (!confirm('Delete "' + ((job && job.name) || 'this job') + '"? Its dates come off the calendar for good.')) return;
+  closeModal('log');
+  deleteLog(id, true);
+}
+function toggleJobCancelled() {
+  var id = editingLogId;
+  var job = logs.find(function(l) { return l.id === id; });
+  if (!job) { closeModal('log'); return; }
+  var wasCancelled = job.status === 'cancelled';
+  job.status = wasCancelled ? 'completed' : 'cancelled';
+  save();
+  if (settings.gcalSync !== false && driveState.connected) syncItemToCalendar(job, 'job');
+  closeModal('log');
+  refreshActive();
+  toast(wasCancelled ? 'Job restored.' : 'Marked as fell through — dates stay on record, struck through.');
+}
+function releaseInquiry() {
+  var id = editingInquiryId;
+  if (!id) { closeModal('inquiry'); return; }
+  var inq = inquiries.find(function(x) { return x.id === id; });
+  var dates = inq ? itemDates(inq) : [];
+  var warn = 'Release ' + (dates.length ? dateRangeLabel(dates) : 'these dates') + '?\n\n' +
+    'The hold disappears from your calendar and any tentative Google Calendar events are deleted. The days become bookable again.';
+  if (!confirm(warn)) return;
+  closeModal('inquiry');
+  deleteInquiry(id, true);
+  toast('Dates released.');
+}
+
+
+const save = () => {
+  DB.set('settings', settings);
+  DB.set('clients',  clients);
+  DB.set('logs',     logs);
+  DB.set('inquiries', inquiries);
+  DB.set('invoices', invoices);
+  scheduleSyncToDrive();
+};
+
+// ── GOOGLE DRIVE SYNC ────────────────────────────────────────────────
+var driveState = {
+  accessToken: null,
+  tokenExpiry: 0,
+  fileId: null,
+  connected: false,
+  syncing: false,
+  lastSync: null,
+  loadingFromDrive: false
+};
+var tokenClient = null;
+var syncTimer = null;
+var DATA_FILENAME = 'CineWork-Data.xlsx';
+var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+
+function initDriveClient() {
+  if (!settings.driveClientId) return;
+  if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+    setTimeout(initDriveClient, 500);
+    return;
+  }
+  try {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: settings.driveClientId,
+      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events',
+      callback: function(resp) {
+        if (resp.access_token) {
+          driveState.accessToken = resp.access_token;
+          driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
+          driveState.connected = true;
+          settings.driveConnected = true;
+          save();
+          onDriveConnected();
+        } else {
+          updateSyncStatus('Auth failed');
+        }
+      }
+    });
+  } catch(e) {
+    console.error('Drive init failed', e);
+    updateSyncStatus('Init error');
+  }
+}
+
+function connectDrive() {
+  if (!settings.driveClientId) {
+    toast('Enter your Google Client ID first', 'error');
+    return;
+  }
+  if (!tokenClient) initDriveClient();
+  if (!tokenClient) { toast('Google API loading... try again in a moment.', 'error'); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function disconnectDrive() {
+  if (!confirm('Disconnect Google Drive? Your local data stays, but auto-sync stops.')) return;
+  driveState.accessToken = null;
+  driveState.connected = false;
+  settings.driveConnected = false;
+  settings.driveFileId = null;
+  driveState.fileId = null;
+  save();
+  updateSyncStatus('Not connected');
+  toast('Disconnected from Drive.');
+}
+
+function ensureToken() {
+  return new Promise(function(resolve, reject) {
+    if (driveState.accessToken && Date.now() < driveState.tokenExpiry) return resolve(driveState.accessToken);
+    if (!tokenClient) return reject(new Error('Not connected'));
+    var origCb = tokenClient.callback;
+    tokenClient.callback = function(resp) {
+      tokenClient.callback = origCb;
+      if (resp.access_token) {
+        driveState.accessToken = resp.access_token;
+        driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
+        driveState.connected = true;
+        resolve(resp.access_token);
+      } else reject(new Error('No token'));
+    };
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+function onDriveConnected() {
+  updateSyncStatus('Finding data file...');
+  ensureToken().then(function(token) {
+    if (settings.driveFileId) {
+      driveState.fileId = settings.driveFileId;
+      return loadFromDrive(false);
+    }
+    var q = encodeURIComponent("name='" + DATA_FILENAME + "' and trashed=false");
+    return fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name,modifiedTime)&spaces=drive', {
+      headers: { Authorization: 'Bearer ' + token }
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.files && data.files.length) {
+        driveState.fileId = data.files[0].id;
+        settings.driveFileId = driveState.fileId;
+        save();
+        return loadFromDrive(false);
+      } else {
+        updateSyncStatus('Creating file...');
+        return syncToDrive(false);
+      }
+    });
+  }).then(function() {
+    updateSyncStatus();
+    toast('Google Drive connected!');
+    // First-time or reconnect: pull from Calendar too
+    if (settings.gcalSync !== false) {
+      settings.gcalSyncToken = null; // force full sync on connect
+      setTimeout(function() { pullFromCalendar(false); }, 500);
+    }
+  }).catch(function(e) {
+    console.error(e);
+    updateSyncStatus('Sync error');
+    toast('Drive error: ' + (e.message || e), 'error');
+  });
+}
+
+function dataToWorkbook() {
+  var wb = XLSX.utils.book_new();
+  var clientsForSheet = clients.map(function(c) {
+    var copy = Object.assign({}, c);
+    copy.contactsJson = JSON.stringify(c.contacts || []);
+    delete copy.contacts;
+    return copy;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clientsForSheet.length ? clientsForSheet : [{id:'',name:'',contact:'',email:'',phone:'',address:'',gst:'',industry:'',createdAt:'',contactsJson:''}]), 'Clients');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logs.length ? logs : [{id:'',name:'',clientId:'',date:'',type:'',days:'',rate:'',location:'',notes:'',status:'',gcalEventId:''}]), 'Logs');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inquiries.length ? inquiries : [{id:'',name:'',clientId:'',clientName:'',date:'',days:'',notes:'',status:'',createdAt:'',gcalEventId:''}]), 'Inquiries');
+  var invForSheet = invoices.map(function(i) {
+    var copy = Object.assign({}, i);
+    copy.lineItemsJson = JSON.stringify(i.lineItems || []);
+    delete copy.lineItems;
+    return copy;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invForSheet.length ? invForSheet : [{id:'',number:'',clientId:'',project:'',date:'',due:'',status:'',subtotal:'',tax:'',total:'',taxRate:'',currency:'',notes:'',createdAt:'',lineItemsJson:''}]), 'Invoices');
+  var settingsArr = Object.keys(settings).filter(function(k) {
+    return ['driveConnected','driveFileId'].indexOf(k) === -1;
+  }).map(function(k) { return { key: k, value: typeof settings[k] === 'string' ? settings[k] : JSON.stringify(settings[k]) }; });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(settingsArr), 'Settings');
+  return wb;
+}
+
+function workbookToData(wb) {
+  var out = { clients:[], logs:[], inquiries:[], invoices:[], settings:{} };
+  if (wb.Sheets['Clients']) {
+    out.clients = XLSX.utils.sheet_to_json(wb.Sheets['Clients']).filter(function(r) { return r.id; }).map(function(c) {
+      if (c.contactsJson) {
+        try { c.contacts = JSON.parse(c.contactsJson); } catch(e) { c.contacts = []; }
+        delete c.contactsJson;
+      }
+      return c;
+    });
+  }
+  if (wb.Sheets['Logs']) {
+    out.logs = XLSX.utils.sheet_to_json(wb.Sheets['Logs']).filter(function(r) { return r.id; }).map(function(l) {
+      l.days = parseFloat(l.days) || 1;
+      l.rate = parseFloat(l.rate) || 0;
+      return l;
+    });
+  }
+  if (wb.Sheets['Inquiries']) {
+    out.inquiries = XLSX.utils.sheet_to_json(wb.Sheets['Inquiries']).filter(function(r) { return r.id; }).map(function(i) {
+      i.days = parseFloat(i.days) || 1;
+      return i;
+    });
+  }
+  if (wb.Sheets['Invoices']) {
+    out.invoices = XLSX.utils.sheet_to_json(wb.Sheets['Invoices']).filter(function(r) { return r.id; }).map(function(inv) {
+      if (inv.lineItemsJson) {
+        try { inv.lineItems = JSON.parse(inv.lineItemsJson); } catch(e) { inv.lineItems = []; }
+        delete inv.lineItemsJson;
+      }
+      ['subtotal','tax','total','taxRate'].forEach(function(k) { if (inv[k] !== undefined) inv[k] = parseFloat(inv[k]) || 0; });
+      return inv;
+    });
+  }
+  if (wb.Sheets['Settings']) {
+    XLSX.utils.sheet_to_json(wb.Sheets['Settings']).forEach(function(row) {
+      if (!row.key) return;
+      var v = row.value;
+      try { v = JSON.parse(row.value); } catch(e) { /* string */ }
+      out.settings[row.key] = v;
+    });
+  }
+  return out;
+}
+
+function syncToDrive(showToast) {
+  if (!driveState.connected) { if (showToast) toast('Connect Drive first', 'error'); return Promise.resolve(); }
+  if (driveState.syncing) return Promise.resolve();
+  driveState.syncing = true;
+  updateSyncStatus('Syncing...');
+  return ensureToken().then(function(token) {
+    var wb = dataToWorkbook();
+    var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    var blob = new Blob([wbout], { type: XLSX_MIME });
+    var meta = { name: DATA_FILENAME, mimeType: XLSX_MIME };
+    var form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', blob);
+    var url, method;
+    if (driveState.fileId) {
+      url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveState.fileId + '?uploadType=multipart';
+      method = 'PATCH';
+    } else {
+      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      method = 'POST';
+    }
+    return fetch(url, { method: method, headers: { Authorization: 'Bearer ' + token }, body: form });
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+    return r.json();
+  }).then(function(result) {
+    if (result.id) {
+      driveState.fileId = result.id;
+      settings.driveFileId = result.id;
+    }
+    driveState.lastSync = new Date().toISOString();
+    settings.lastSync = driveState.lastSync;
+    DB.set('settings', settings); // save without re-triggering scheduleSync
+    driveState.syncing = false;
+    updateSyncStatus();
+    if (showToast) toast('Synced to Drive!');
+  }).catch(function(e) {
+    driveState.syncing = false;
+    console.error(e);
+    updateSyncStatus('Sync error');
+    if (showToast) toast('Sync failed: ' + e.message, 'error');
+  });
+}
+
+function loadFromDrive(showToast) {
+  if (!driveState.connected || !driveState.fileId) { if (showToast) toast('Not connected to Drive', 'error'); return Promise.resolve(); }
+  driveState.loadingFromDrive = true;
+  updateSyncStatus('Loading from Drive...');
+  return ensureToken().then(function(token) {
+    return fetch('https://www.googleapis.com/drive/v3/files/' + driveState.fileId + '?alt=media', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Download failed: ' + r.status);
+    return r.arrayBuffer();
+  }).then(function(buf) {
+    var wb = XLSX.read(buf, { type: 'array' });
+    var data = workbookToData(wb);
+    if (data.clients.length || data.logs.length || data.invoices.length || data.inquiries.length) {
+      clients = data.clients;
+      logs = data.logs;
+      inquiries = data.inquiries;
+      invoices = data.invoices;
+    }
+    Object.keys(data.settings).forEach(function(k) {
+      if (['driveClientId','driveConnected','driveFileId'].indexOf(k) === -1) {
+        settings[k] = data.settings[k];
+      }
+    });
+    DB.set('clients', clients);
+    DB.set('logs', logs);
+    DB.set('inquiries', inquiries);
+    DB.set('invoices', invoices);
+    DB.set('settings', settings);
+    driveState.loadingFromDrive = false;
+    document.querySelectorAll('.set-currency-display').forEach(function(el) { el.textContent = settings.currency; });
+    populateClientDropdowns();
+    if (document.getElementById('page-dashboard').classList.contains('active')) { renderDashboard(); renderCalendar(); }
+    updateSyncStatus();
+    if (showToast) toast('Loaded from Drive!');
+  }).catch(function(e) {
+    driveState.loadingFromDrive = false;
+    console.error(e);
+    updateSyncStatus('Load error');
+    if (showToast) toast('Load failed: ' + e.message, 'error');
+  });
+}
+
+function scheduleSyncToDrive() {
+  if (!driveState.connected || settings.autosync === false || driveState.loadingFromDrive) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(function() { syncToDrive(false); }, 2000);
+}
+
+// ── GOOGLE CALENDAR SYNC ─────────────────────────────────────────────
+var GCAL_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+var recentlyPushed = {}; // itemId -> timestamp; skip pull reconcile if too recent
+var PUSH_COOLDOWN_MS = 15000;
+var pullTimer = null;
+var pulling = false;
+
+function markPushed(id) { recentlyPushed[id] = Date.now(); }
+function isRecentlyPushed(id) { return recentlyPushed[id] && (Date.now() - recentlyPushed[id]) < PUSH_COOLDOWN_MS; }
+
+function isoDatePlusDays(dateStr, days) {
+  var d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + Math.max(1, Math.ceil(days)));
+  return d.toISOString().slice(0,10);
+}
+function daysBetweenIso(startIso, endIso) {
+  if (!startIso || !endIso) return 1;
+  var s = new Date(startIso + 'T00:00:00');
+  var e = new Date(endIso   + 'T00:00:00');
+  return Math.max(1, Math.round((e - s) / 86400000));
+}
+function areDatesContiguous(dates) {
+  if (!dates || dates.length < 2) return true;
+  var sorted = dates.slice().sort();
+  for (var i = 1; i < sorted.length; i++) {
+    var prev = new Date(sorted[i-1] + 'T00:00:00');
+    prev.setDate(prev.getDate() + 1);
+    if (prev.toISOString().slice(0,10) !== sorted[i]) return false;
+  }
+  return true;
+}
+
+function buildGCalEvent(item, kind) {
+  var cl = clients.find(function(c) { return c.id === item.clientId; });
+  var clientName = cl ? cl.name : (item.clientName || '');
+  var isHalf = item._isHalfDay === true;
+  var days = isHalf ? 1 : Math.max(1, Math.ceil(+item.days || 1));
+  var earn = (+item.days || 1) * (+item.rate || 0);
+  var descLines = [];
+  if (clientName)      descLines.push('Client: ' + clientName);
+  if (isHalf)          descLines.push('Half day (½)');
+  if (kind === 'job') {
+    if (item.type)     descLines.push('Type: ' + item.type);
+    descLines.push('Days: ' + item.days + (item.rate ? ' · Rate: ' + settings.currency + item.rate : ''));
+    if (earn)          descLines.push('Total: ' + settings.currency + earn.toLocaleString());
+  } else {
+    descLines.push('Inquiry — soft-locked ' + item.days + ' day' + (item.days !== 1 ? 's' : ''));
+  }
+  if (item.location)   descLines.push('Location: ' + item.location);
+  if (item.notes)      descLines.push('\n' + item.notes);
+  descLines.push('\n— From CineWork');
+  var statusMap = { completed: 'confirmed', ongoing: 'confirmed', cancelled: 'cancelled', inquiry: 'tentative' };
+  var colorMap  = { completed: '5', ongoing: '9', cancelled: '8', inquiry: '6' };
+  var titlePrefix = (kind === 'inquiry' ? '[Inquiry] ' : '') + (isHalf ? '½ ' : '');
+  return {
+    summary: titlePrefix + item.name,
+    description: descLines.join('\n'),
+    location: item.location || undefined,
+    start: { date: item.date },
+    end:   { date: isoDatePlusDays(item.date, days) },
+    status: statusMap[item.status] || 'confirmed',
+    colorId: colorMap[item.status] || '5',
+    transparency: (kind === 'inquiry' ? 'transparent' : 'opaque'),
+    extendedProperties: {
+      private: {
+        cineWorkApp: 'true',
+        cineWorkId: item.id,
+        cineWorkKind: kind,
+        cineWorkHalfDay: isHalf ? 'true' : 'false'
+      }
+    }
+  };
+}
+
+function syncItemToCalendar(item, kind) {
+  if (!driveState.connected || settings.gcalSync === false) return Promise.resolve();
+  if (!item || !item.date) return Promise.resolve();
+
+  // Multi-date or mixed fractions → one event per date (like inquiries)
+  var hasFractions = item.dayFractions && item.dayFractions.length;
+  var anyHalf = hasFractions && item.dayFractions.some(function(f) { return f === 0.5; });
+  var multiDate = item.dates && item.dates.length > 1;
+  if (kind === 'job' && (
+      (multiDate && !areDatesContiguous(item.dates)) ||
+      (multiDate && anyHalf) ||
+      (!multiDate && anyHalf))) {
+    // Single-day half or any multi-day-with-half or non-contiguous multi-day → multi-event flow
+    return syncItemAsMultipleEvents(item, kind);
+  }
+
+  return ensureToken().then(function(token) {
+    var body = buildGCalEvent(item, kind);
+    var url, method;
+    if (item.gcalEventId) {
+      url = GCAL_API + '/' + item.gcalEventId;
+      method = 'PATCH';
+    } else {
+      url = GCAL_API;
+      method = 'POST';
+    }
+    return fetch(url, {
+      method: method,
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r) {
+      if (r.status === 404 && item.gcalEventId) {
+        // Event was deleted externally — retry as create
+        item.gcalEventId = null;
+        return fetch(GCAL_API, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      }
+      return r;
+    }).then(function(r) {
+      if (!r.ok) throw new Error('Calendar ' + r.status);
+      return r.json();
+    }).then(function(evt) {
+      // If we're moving from multi-event to single-event mode, clean up leftover event IDs
+      if (item.gcalEventIds && item.gcalEventIds.length) {
+        item.gcalEventIds.forEach(function(oldId) {
+          if (oldId !== evt.id) deleteEventFromCalendar(oldId);
+        });
+        item.gcalEventIds = [];
+      }
+      if (evt.id && item.gcalEventId !== evt.id) {
+        item.gcalEventId = evt.id;
+        DB.set('logs', logs);
+        DB.set('inquiries', inquiries);
+      }
+      markPushed(item.id);
+    });
+  }).catch(function(e) {
+    console.warn('GCal sync failed:', e);
+  });
+}
+
+// Multi-event push: one event per date. Used for inquiries always, and for jobs with non-contiguous dates.
+function syncItemAsMultipleEvents(item, kind) {
+  if (!driveState.connected || settings.gcalSync === false) return Promise.resolve();
+  var dates = (item.dates && item.dates.length) ? item.dates : (item.date ? [item.date] : []);
+  if (!dates.length) return Promise.resolve();
+
+  // Delete any old events (single or multi), then re-create fresh
+  var oldIds = (item.gcalEventIds || []).slice();
+  if (item.gcalEventId) oldIds.push(item.gcalEventId);
+  var chain = Promise.resolve();
+  oldIds.forEach(function(id) {
+    chain = chain.then(function() { return deleteEventFromCalendar(id); });
+  });
+
+  return chain.then(function() { return ensureToken(); }).then(function(token) {
+    var newIds = [];
+    var createChain = Promise.resolve();
+    var fractions = (item.dayFractions && item.dayFractions.length === dates.length)
+      ? item.dayFractions
+      : dates.map(function() { return 1; });
+    dates.forEach(function(dateStr, i) {
+      var isHalf = fractions[i] === 0.5;
+      createChain = createChain.then(function() {
+        var body = buildGCalEvent(Object.assign({}, item, { date: dateStr, days: isHalf ? 0.5 : 1, _isHalfDay: isHalf }), kind);
+        return fetch(GCAL_API, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }).then(function(r) { return r.ok ? r.json() : null; }).then(function(evt) {
+          if (evt && evt.id) newIds.push(evt.id);
+        });
+      });
+    });
+    return createChain.then(function() {
+      item.gcalEventIds = newIds;
+      item.gcalEventId = null; // clear legacy field
+      if (kind === 'inquiry') DB.set('inquiries', inquiries);
+      else DB.set('logs', logs);
+      markPushed(item.id);
+    });
+  }).catch(function(e) {
+    console.warn('Multi-event GCal sync failed:', e);
+  });
+}
+
+function syncInquiryToCalendar(inq) {
+  // Inquiries always use one event per date (naturally discrete soft-locks)
+  return syncItemAsMultipleEvents(inq, 'inquiry');
+}
+
+function deleteEventFromCalendar(eventId) {
+  if (!driveState.connected || !eventId) return Promise.resolve();
+  return ensureToken().then(function(token) {
+    return fetch(GCAL_API + '/' + eventId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token }
+    });
+  }).catch(function(e) { console.warn('GCal delete failed:', e); });
+}
+
+function syncAllToCalendar() {
+  if (!driveState.connected) { toast('Connect Drive/Calendar first', 'error'); return; }
+  toast('Syncing all to Google Calendar...');
+  var chain = Promise.resolve();
+  logs.forEach(function(l) { chain = chain.then(function() { return syncItemToCalendar(l, 'job'); }); });
+  inquiries.forEach(function(i) { chain = chain.then(function() { return syncInquiryToCalendar(i); }); });
+  chain.then(function() {
+    save();
+    toast('Synced ' + (logs.length + inquiries.length) + ' items to Google Calendar!');
+  });
+}
+
+// ── GOOGLE CALENDAR TWO-WAY (pull from GCal → app) ───────────────────
+function pullFromCalendar(showToast) {
+  if (!driveState.connected || settings.gcalSync === false) return Promise.resolve();
+  if (pulling) return Promise.resolve();
+  pulling = true;
+
+  // One-time migration: tokens minted before this build were issued against a filtered
+  // query and are not safely replayable. Drop once and re-mint from a clean full sync.
+  if (settings.gcalSyncScheme !== 2) {
+    settings.gcalSyncToken = null;
+    settings.gcalSyncScheme = 2;
+    DB.set('settings', settings);
+    console.log('[CineWork] Sync scheme upgraded — forcing one full sync');
+  }
+
+  updateSyncStatus('Pulling from Calendar...');
+
+  var doPull = function(pageToken, useSyncToken, accumulatedEvents) {
+    return ensureToken().then(function(token) {
+      var params = new URLSearchParams();
+      params.set('showDeleted', 'true');
+      params.set('singleEvents', 'true');
+      params.set('maxResults', '250');
+      if (pageToken) params.set('pageToken', pageToken);
+      if (useSyncToken && settings.gcalSyncToken) {
+        // Incremental sync. Google rejects syncToken combined with any restricting
+        // filter (privateExtendedProperty, timeMin/timeMax, q, orderBy, updatedMin)
+        // with a 400 — the token already encodes the query it came from. So we pull
+        // everything that changed and filter client-side; reconcileFromCalendar
+        // ignores any event that isn't ours.
+        params.set('syncToken', settings.gcalSyncToken);
+      } else {
+        // Full sync. We deliberately do NOT filter on privateExtendedProperty here
+        // either: the nextSyncToken inherits the query it was minted from, and that
+        // query must be replayable on the incremental call — where restricting
+        // filters are rejected (400 syncTokenWithRequestRestrictions). One code path,
+        // filtered client-side in both directions.
+        var lookback = new Date();
+        lookback.setDate(lookback.getDate() - 90);
+        params.set('timeMin', lookback.toISOString());
+      }
+      return fetch(GCAL_API + '?' + params.toString(), {
+        headers: { Authorization: 'Bearer ' + token }
+      }).then(function(r) {
+        if (r.status === 410) {
+          // syncToken expired — clear and full-sync
+          settings.gcalSyncToken = null;
+          return doPull(null, false, []);
+        }
+        if (!r.ok) return r.text().then(function(t) { throw new Error('Pull HTTP ' + r.status + ': ' + t); });
+        return r.json();
+      }).then(function(data) {
+        var events = (data.items || []);
+        var combined = (accumulatedEvents || []).concat(events);
+        if (data.nextPageToken) {
+          return doPull(data.nextPageToken, useSyncToken, combined);
+        }
+        // Save new syncToken for next incremental pull
+        if (data.nextSyncToken) {
+          settings.gcalSyncToken = data.nextSyncToken;
+          DB.set('settings', settings);
+        }
+        return combined;
+      });
+    });
+  };
+
+  return doPull(null, true, []).then(function(events) {
+    console.log('[CineWork] Pull returned ' + events.length + ' event(s) from Calendar');
+    var changed = reconcileFromCalendar(events);
+    console.log('[CineWork] Reconciled ' + changed + ' local change(s)');
+    pulling = false;
+    updateSyncStatus();
+    if (changed > 0) {
+      DB.set('logs', logs);
+      DB.set('inquiries', inquiries);
+      scheduleSyncToDrive();
+      if (document.getElementById('page-dashboard').classList.contains('active')) { renderDashboard(); renderCalendar(); }
+      if (document.getElementById('page-log').classList.contains('active')) renderLog();
+      if (showToast) toast('Pulled ' + changed + ' change' + (changed !== 1 ? 's' : '') + ' from Calendar.');
+    } else if (showToast) {
+      toast('Already up to date with Calendar.');
+    }
+  }).catch(function(e) {
+    pulling = false;
+    console.warn('[CineWork] Pull failed:', e);
+    updateSyncStatus('Pull error');
+    if (showToast) toast('Pull failed: ' + e.message, 'error');
+  });
+}
+
+// Incremental pulls only return the events that changed. For an item spread across
+// several events, that means we may see one event of three — not enough to rewrite the
+// whole item. Fill the gaps from what we already hold locally before reconciling.
+function hydrateItemEvents(item, itemEvents) {
+  var known = item.gcalEventIds || [];
+  if (known.length < 2) return itemEvents;
+  var received = {};
+  itemEvents.forEach(function(e) { if (e.id) received[e.id] = e; });
+  var dates = item.dates || (item.date ? [item.date] : []);
+  var fracs = item.dayFractions || [];
+  var out = [];
+  known.forEach(function(eid, i) {
+    if (received[eid]) { out.push(received[eid]); delete received[eid]; return; }
+    if (!dates[i]) return;
+    // Synthesise the unchanged event from local state so the diff below sees no change
+    out.push({
+      id: eid,
+      summary: item.name,
+      location: item.location,
+      start: { date: dates[i] },
+      end:   { date: dates[i] },
+      extendedProperties: { private: { cineWorkHalfDay: fracs[i] === 0.5 ? 'true' : 'false' } }
+    });
+  });
+  // Events we received but didn't know about (e.g. re-created after an external delete)
+  Object.keys(received).forEach(function(k) { out.push(received[k]); });
+  return out;
+}
+
+function reconcileFromCalendar(events) {
+  var changed = 0;
+
+  // Deleted events come back stripped — typically just id + status:'cancelled', with no
+  // extendedProperties — so they can't be matched on our marker. Build a reverse index
+  // from the event IDs we stored locally so external deletions still land.
+  var eventIdToItem = {};
+  logs.forEach(function(l) {
+    if (l.gcalEventId) eventIdToItem[l.gcalEventId] = { id: l.id, kind: 'job' };
+    (l.gcalEventIds || []).forEach(function(eid) { eventIdToItem[eid] = { id: l.id, kind: 'job' }; });
+  });
+  inquiries.forEach(function(q) {
+    if (q.gcalEventId) eventIdToItem[q.gcalEventId] = { id: q.id, kind: 'inquiry' };
+    (q.gcalEventIds || []).forEach(function(eid) { eventIdToItem[eid] = { id: q.id, kind: 'inquiry' }; });
+  });
+
+  // Group events by our local item id
+  var byItemId = {};
+  var kindByItemId = {};
+  events.forEach(function(evt) {
+    var ep = (evt.extendedProperties && evt.extendedProperties.private) || {};
+    var id = ep.cineWorkId;
+    var kind = ep.cineWorkKind;
+    if (!id) {
+      var known = evt.id && eventIdToItem[evt.id];
+      if (!known) return; // not one of ours
+      id = known.id;
+      kind = kind || known.kind;
+    }
+    if (!byItemId[id]) byItemId[id] = [];
+    byItemId[id].push(evt);
+    if (kind && !kindByItemId[id]) kindByItemId[id] = kind;
+  });
+
+  Object.keys(byItemId).forEach(function(itemId) {
+    // Note: we used to skip items pushed within the last 15s to avoid reconciling our own push echoes.
+    // But content-comparison below already handles echoes correctly (no diff → no change), and the
+    // short-circuit was blocking legitimate GCal edits made shortly after a push. So we always reconcile.
+
+    var itemEvents = byItemId[itemId];
+    var kind = kindByItemId[itemId] || 'job';
+
+    if (kind === 'job') {
+      var jobIdx = logs.findIndex(function(x) { return x.id === itemId; });
+      if (jobIdx === -1) return; // not in local — skip
+      var job = logs[jobIdx];
+      itemEvents = hydrateItemEvents(job, itemEvents);
+
+      // Multi-event job (from non-contiguous inquiry conversion, half days, etc.)
+      if (itemEvents.length > 1) {
+        var live = itemEvents.filter(function(e) { return e.status !== 'cancelled' && e.start && e.start.date; })
+                             .sort(function(a,b) { return a.start.date < b.start.date ? -1 : 1; });
+        if (!live.length) {
+          logs.splice(jobIdx, 1);
+          changed++;
+          return;
+        }
+        var newDates = live.map(function(e) { return e.start.date; });
+        var newFractions = live.map(function(e) {
+          var priv = (e.extendedProperties && e.extendedProperties.private) || {};
+          return priv.cineWorkHalfDay === 'true' ? 0.5 : 1;
+        });
+        var newEventIds = live.map(function(e) { return e.id; });
+        var newName = live[0].summary ? live[0].summary.replace(/^\[Inquiry\]\s*/, '').replace(/^½\s*/, '') : job.name;
+        var oldDatesStr = (job.dates || [job.date]).join(',');
+        var newDatesStr = newDates.join(',');
+        var oldFracsStr = (job.dayFractions || []).join(',');
+        var newFracsStr = newFractions.join(',');
+        if (oldDatesStr !== newDatesStr || newName !== job.name || oldFracsStr !== newFracsStr) {
+          job.dates = newDates;
+          job.dayFractions = newFractions;
+          job.date = newDates[0];
+          job.days = newFractions.reduce(function(s, f) { return s + f; }, 0);
+          job.name = newName;
+          job.gcalEventIds = newEventIds;
+          job.gcalEventId = null;
+          changed++;
+        }
+        return;
+      }
+
+      // Single event — existing single-span job behavior
+      var evt = itemEvents[0];
+      if (evt.status === 'cancelled') {
+        logs.splice(jobIdx, 1);
+        changed++;
+        return;
+      }
+      var newDate = evt.start && evt.start.date;
+      var newEndDate = evt.end && evt.end.date;
+      var newDays = newDate && newEndDate ? daysBetweenIso(newDate, newEndDate) : job.days;
+      var evPriv = (evt.extendedProperties && evt.extendedProperties.private) || {};
+      var evIsHalf = evPriv.cineWorkHalfDay === 'true';
+      if (evIsHalf) newDays = 0.5;
+      var newName = evt.summary ? evt.summary.replace(/^\[Inquiry\]\s*/, '').replace(/^½\s*/, '') : job.name;
+      var newLoc = evt.location || job.location;
+      if (newDate !== job.date || newDays !== job.days || newName !== job.name || newLoc !== job.location) {
+        job.date = newDate || job.date;
+        job.days = newDays;
+        job.name = newName;
+        job.location = newLoc;
+        // If previously multi-date but now single event → clear multi-date arrays
+        if (job.dates) delete job.dates;
+        if (job.dayFractions) delete job.dayFractions;
+        if (evIsHalf) job.dayFractions = [0.5];
+        changed++;
+      }
+    } else if (kind === 'inquiry') {
+      var inqIdx = inquiries.findIndex(function(x) { return x.id === itemId; });
+      if (inqIdx === -1) return;
+      var inq = inquiries[inqIdx];
+      itemEvents = hydrateItemEvents(inq, itemEvents);
+      // Keep only non-cancelled events, sorted by date
+      var live = itemEvents.filter(function(e) { return e.status !== 'cancelled' && e.start && e.start.date; })
+                           .sort(function(a,b) { return a.start.date < b.start.date ? -1 : 1; });
+      if (!live.length) {
+        inquiries.splice(inqIdx, 1);
+        changed++;
+        return;
+      }
+      var newDates = live.map(function(e) { return e.start.date; });
+      var newEventIds = live.map(function(e) { return e.id; });
+      var newName = live[0].summary ? live[0].summary.replace(/^\[Inquiry\]\s*/, '') : inq.name;
+      var oldDatesStr = (inq.dates || []).join(',');
+      var newDatesStr = newDates.join(',');
+      if (oldDatesStr !== newDatesStr || newName !== inq.name) {
+        inq.dates = newDates;
+        inq.date = newDates[0];
+        inq.days = newDates.length;
+        inq.name = newName;
+        inq.gcalEventIds = newEventIds;
+        changed++;
+      }
+    }
+  });
+
+  return changed;
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────────────
+
+// ── TOAST ────────────────────────────────────────────────────────────
+function toast(msg, type) {
+  type = type || 'success';
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── MODALS ───────────────────────────────────────────────────────────
+function openModal(type) {
+  if (type === 'invoice') prepareInvoiceModal();
+  if (type === 'log')     prepareLogModal();
+  if (type === 'client')  prepareClientModal();
+  if (type === 'inquiry') prepareInquiryModal();
+  document.getElementById('modal-' + type).classList.add('open');
+}
+function closeModal(type) {
+  document.getElementById('modal-' + type).classList.remove('open');
+  editingLogId = null;
+  editingClientId = null;
+  editingInquiryId = null;
+}
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// ── SETTINGS ─────────────────────────────────────────────────────────
+function loadSettings() {
+  var fields = ['name','biz','email','phone','address','gst','currency','terms','due','taxrate','dayrate'];
+  fields.forEach(function(k) {
+    var el = document.getElementById('set-' + k);
+    if (el) el.value = settings[k] !== undefined ? settings[k] : '';
+  });
+  var idEl = document.getElementById('set-drive-client-id');
+  if (idEl) idEl.value = settings.driveClientId || '';
+  var autoEl = document.getElementById('set-autosync');
+  if (autoEl) autoEl.checked = settings.autosync !== false;
+  var gcalEl = document.getElementById('set-gcalsync');
+  if (gcalEl) gcalEl.checked = settings.gcalSync !== false;
+  updateSyncStatus();
+}
+function saveDriveSettings() {
+  settings.driveClientId = document.getElementById('set-drive-client-id').value.trim();
+  settings.autosync = document.getElementById('set-autosync').checked;
+  settings.gcalSync = document.getElementById('set-gcalsync').checked;
+  save();
+  toast('Drive settings saved. Click "Connect" to link.');
+  initDriveClient();
+}
+function saveSettings() {
+  var fields = ['name','biz','email','phone','address','gst','currency','terms','due','taxrate'];
+  fields.forEach(function(k) {
+    var el = document.getElementById('set-' + k);
+    if (el) settings[k] = el.value;
+  });
+  settings.dayrate = document.getElementById('set-dayrate').value;
+  save();
+  document.querySelectorAll('.set-currency-display').forEach(function(el) {
+    el.textContent = settings.currency;
+  });
+  toast('Settings saved!');
+}
+
+// ── CLIENTS ──────────────────────────────────────────────────────────
+function deleteClient(id) {
+  if (!confirm('Delete this client?')) return;
+  clients = clients.filter(function(x) { return x.id !== id; });
+  save(); renderClients(); populateClientDropdowns();
+  toast('Client deleted.');
+}
+
+// ── WORK LOG ─────────────────────────────────────────────────────────
+function rebuildJobDates(preserveExisting) {
+  var wrap = document.getElementById('log-dates-wrap');
+  if (!wrap) return;
+  var days = Math.max(1, parseInt(document.getElementById('log-days').value) || 1);
+  var existingDates = [], existingHalves = [];
+  if (preserveExisting) {
+    wrap.querySelectorAll('input[type=date]').forEach(function(inp) { existingDates.push(inp.value); });
+    wrap.querySelectorAll('input[type=checkbox][data-half]').forEach(function(cb) { existingHalves.push(cb.checked); });
+  }
+  var label = days === 1 ? 'Date' : days + ' shoot dates';
+  var html = '<label>' + label + '</label>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">';
+  for (var i = 0; i < days; i++) {
+    var val = existingDates[i] || '';
+    if (!val) {
+      var d = new Date();
+      d.setDate(d.getDate() + i);
+      val = d.toISOString().slice(0,10);
+    }
+    var isHalf = !!existingHalves[i];
+    html += '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<input type="date" value="' + val + '" data-job-date-idx="' + i + '" style="flex:1;">' +
+      '<label style="font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;padding:0 4px;user-select:none;">' +
+        '<input type="checkbox" data-half="1" ' + (isHalf ? 'checked' : '') + ' style="width:auto;margin-right:2px;vertical-align:middle;"> ½' +
+      '</label>' +
+    '</div>';
+  }
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--text3);margin-top:6px;">' +
+    (days > 1 ? "Dates don't need to be consecutive. " : '') +
+    'Check ½ for half-day shoots (billed at 0.5 × day rate).' +
+    '</div>';
+  wrap.innerHTML = html;
+}
+
+function prepareLogModal() {
+  document.getElementById('log-name').value     = '';
+  document.getElementById('log-days').value     = '1';
+  document.getElementById('log-rate').value     = settings.dayrate || '';
+  document.getElementById('log-location').value = '';
+  document.getElementById('log-notes').value    = '';
+  document.getElementById('log-status').value   = 'completed';
+  ['btn-delete-job', 'btn-cancel-job'].forEach(function(bid) {
+    var b = document.getElementById(bid);
+    if (b) b.style.display = 'none';
+  });
+  document.getElementById('log-type').value     = 'Commercial';
+  populateClientDropdowns();
+  document.getElementById('log-dates-wrap').innerHTML = '';
+  rebuildJobDates(false);
+  // If opened from calendar day, seed the first date
+  var seedDate = window._calDayDate;
+  if (seedDate) {
+    var first = document.querySelector('#log-dates-wrap input[type=date]');
+    if (first) first.value = seedDate;
+    window._calDayDate = null;
+  }
+}
+function saveLog() {
+  var name = document.getElementById('log-name').value.trim();
+  if (!name) { toast('Job name required', 'error'); return; }
+  var rows = document.querySelectorAll('#log-dates-wrap > div > div');
+  var dateInputs = document.querySelectorAll('#log-dates-wrap input[type=date]');
+  var halfInputs = document.querySelectorAll('#log-dates-wrap input[type=checkbox][data-half]');
+  var pairs = [];
+  dateInputs.forEach(function(inp, i) {
+    if (inp.value) pairs.push({ date: inp.value, half: halfInputs[i] ? halfInputs[i].checked : false });
+  });
+  if (!pairs.length) { toast('Enter at least one date', 'error'); return; }
+  // Dedupe by date, keep first fraction
+  var seen = {};
+  pairs = pairs.filter(function(p) { if (seen[p.date]) return false; seen[p.date] = true; return true; });
+  pairs.sort(function(a,b) { return a.date < b.date ? -1 : 1; });
+  var dates = pairs.map(function(p) { return p.date; });
+  var dayFractions = pairs.map(function(p) { return p.half ? 0.5 : 1; });
+  var totalDays = dayFractions.reduce(function(s, f) { return s + f; }, 0);
+
+  var existing = editingLogId ? logs.find(function(x) { return x.id === editingLogId; }) : null;
+  var entry = {
+    id:       editingLogId || String(Date.now()),
+    name:     name,
+    clientId: document.getElementById('log-client').value,
+    dates:    dates,
+    dayFractions: dayFractions,
+    date:     dates[0],           // for sorting / backward compat
+    type:     document.getElementById('log-type').value,
+    days:     totalDays,          // computed sum
+    rate:     parseFloat(document.getElementById('log-rate').value) || 0,
+    location: document.getElementById('log-location').value,
+    notes:    document.getElementById('log-notes').value,
+    status:   document.getElementById('log-status').value,
+    gcalEventId:  existing ? existing.gcalEventId  : null,
+    gcalEventIds: existing ? (existing.gcalEventIds || []) : []
+  };
+  if (editingLogId) {
+    var i = logs.findIndex(function(x) { return x.id === editingLogId; });
+    logs[i] = entry;
+  } else {
+    logs.push(entry);
+  }
+  save();
+  syncItemToCalendar(entry, 'job');
+  closeModal('log');
+  renderLog();
+  if (document.getElementById('page-dashboard').classList.contains('active')) { renderDashboard(); renderCalendar(); }
+  toast('Job logged!');
+}
+function editLog(id) {
+  var l = logs.find(function(x) { return x.id === id; });
+  if (!l) return;
+  editingLogId = id;
+  var dates = (l.dates && l.dates.length) ? l.dates : buildContiguousDates(l.date, Math.max(1, Math.ceil(l.days || 1)));
+  var fractions = (l.dayFractions && l.dayFractions.length === dates.length)
+    ? l.dayFractions
+    : dates.map(function() { return 1; });
+  // Backward compat: old jobs with days=0.5 and one date get half-day set
+  if (dates.length === 1 && !l.dayFractions && l.days === 0.5) fractions = [0.5];
+  document.getElementById('log-name').value     = l.name;
+  document.getElementById('log-type').value     = l.type;
+  document.getElementById('log-days').value     = dates.length;
+  document.getElementById('log-rate').value     = l.rate;
+  document.getElementById('log-location').value = l.location || '';
+  document.getElementById('log-notes').value    = l.notes    || '';
+  document.getElementById('log-status').value   = l.status   || 'completed';
+  populateClientDropdowns();
+  document.getElementById('log-client').value = l.clientId || '';
+  document.getElementById('log-dates-wrap').innerHTML = '';
+  rebuildJobDates(false);
+  var dateInputs = document.querySelectorAll('#log-dates-wrap input[type=date]');
+  var halfInputs = document.querySelectorAll('#log-dates-wrap input[type=checkbox][data-half]');
+  dates.forEach(function(d, i) {
+    if (dateInputs[i]) dateInputs[i].value = d;
+    if (halfInputs[i]) halfInputs[i].checked = fractions[i] === 0.5;
+  });
+  applyJobLock(l);
+  document.getElementById('modal-log').classList.add('open');
+}
+function deleteLog(id, skipConfirm) {
+  var locked = jobLockedBy(id);
+  if (locked) {
+    toast('Invoice ' + locked.number + ' is raised against this job — delete the invoice first', 'error');
+    return;
+  }
+  if (!skipConfirm && !confirm('Delete this job? Its dates come off the calendar for good.')) return;
+  var l = logs.find(function(x) { return x.id === id; });
+  if (l) {
+    var evIds = (l.gcalEventIds || []).slice();
+    if (l.gcalEventId) evIds.push(l.gcalEventId);
+    evIds.forEach(function(evId) { deleteEventFromCalendar(evId); });
+  }
+  logs = logs.filter(function(x) { return x.id !== id; });
+  save(); refreshActive();
+  toast('Job deleted.');
+}
+
+// ── INQUIRIES (soft-locked dates) ────────────────────────────────────
+function tomorrowIso() {
+  var d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0,10);
+}
+function buildContiguousDates(startDate, count) {
+  if (!startDate) return [];
+  var out = [];
+  var d = new Date(startDate + 'T00:00:00');
+  var n = Math.max(1, Math.ceil(+count || 1));
+  for (var i = 0; i < n; i++) {
+    out.push(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+function rebuildInquiryDates(preserveExisting) {
+  var wrap = document.getElementById('inq-dates-wrap');
+  if (!wrap) return;
+  var days = Math.max(1, parseInt(document.getElementById('inq-days').value) || 1);
+  var existingDates = [], existingHalves = [];
+  if (preserveExisting) {
+    wrap.querySelectorAll('input[type=date]').forEach(function(inp) { existingDates.push(inp.value); });
+    wrap.querySelectorAll('input[type=checkbox][data-half]').forEach(function(cb) { existingHalves.push(cb.checked); });
+  }
+  var label = days === 1 ? 'Date (default: tomorrow)' : days + ' dates — enter each shoot day';
+  var html = '<label>' + label + '</label>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">';
+  for (var i = 0; i < days; i++) {
+    var val = existingDates[i] || '';
+    if (!val) {
+      var d = new Date();
+      d.setDate(d.getDate() + 1 + i);
+      val = d.toISOString().slice(0,10);
+    }
+    var isHalf = !!existingHalves[i];
+    html += '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<input type="date" value="' + val + '" data-inq-date-idx="' + i + '" style="flex:1;">' +
+      '<label style="font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;padding:0 4px;user-select:none;">' +
+        '<input type="checkbox" data-half="1" ' + (isHalf ? 'checked' : '') + ' style="width:auto;margin-right:2px;vertical-align:middle;"> ½' +
+      '</label>' +
+    '</div>';
+  }
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--text3);margin-top:6px;">' +
+    (days > 1 ? "Dates don't need to be consecutive. " : '') +
+    'Check ½ for half-day shoots.' +
+    '</div>';
+  wrap.innerHTML = html;
+}
+
+function prepareInquiryModal() {
+  document.getElementById('inq-name').value        = '';
+  document.getElementById('inq-days').value        = '1';
+  document.getElementById('inq-notes').value       = '';
+  document.getElementById('inq-client-text').value = '';
+  document.getElementById('inq-modal-title').textContent = 'Log Inquiry';
+  document.getElementById('btn-convert-inquiry').style.display = 'none';
+  document.getElementById('btn-release-inquiry').style.display = 'none';
+  populateClientDropdowns();
+  document.getElementById('inq-client').value = '';
+  // If opened from a calendar day, use that as day 1; else tomorrow
+  var seedDate = window._calDayDate || tomorrowIso();
+  // Clear the date wrap then rebuild with seeded first date
+  document.getElementById('inq-dates-wrap').innerHTML = '';
+  rebuildInquiryDates(false);
+  var first = document.querySelector('#inq-dates-wrap input[type=date]');
+  if (first) first.value = seedDate;
+  window._calDayDate = null;
+}
+
+function saveInquiry() {
+  var name = document.getElementById('inq-name').value.trim();
+  if (!name) { toast('Inquiry name required', 'error'); return; }
+  var dateInputs = document.querySelectorAll('#inq-dates-wrap input[type=date]');
+  var halfInputs = document.querySelectorAll('#inq-dates-wrap input[type=checkbox][data-half]');
+  var pairs = [];
+  dateInputs.forEach(function(inp, i) {
+    if (inp.value) pairs.push({ date: inp.value, half: halfInputs[i] ? halfInputs[i].checked : false });
+  });
+  if (!pairs.length) { toast('Enter at least one date', 'error'); return; }
+  var seen = {};
+  pairs = pairs.filter(function(p) { if (seen[p.date]) return false; seen[p.date] = true; return true; });
+  pairs.sort(function(a,b) { return a.date < b.date ? -1 : 1; });
+  var dates = pairs.map(function(p) { return p.date; });
+  var dayFractions = pairs.map(function(p) { return p.half ? 0.5 : 1; });
+  var totalDays = dayFractions.reduce(function(s, f) { return s + f; }, 0);
+
+  var existing = editingInquiryId ? inquiries.find(function(x) { return x.id === editingInquiryId; }) : null;
+  var inq = {
+    id:         editingInquiryId || String(Date.now()),
+    name:       name,
+    clientId:   document.getElementById('inq-client').value || '',
+    clientName: document.getElementById('inq-client-text').value.trim(),
+    dates:      dates,
+    dayFractions: dayFractions,
+    date:       dates[0],
+    days:       totalDays,
+    notes:      document.getElementById('inq-notes').value,
+    status:     'inquiry',
+    createdAt:  existing ? existing.createdAt : new Date().toISOString(),
+    gcalEventIds: existing ? (existing.gcalEventIds || []) : []
+  };
+  if (editingInquiryId) {
+    var i = inquiries.findIndex(function(x) { return x.id === editingInquiryId; });
+    inquiries[i] = inq;
+  } else {
+    inquiries.push(inq);
+  }
+  save();
+  syncInquiryToCalendar(inq);
+  closeModal('inquiry');
+  renderCalendar();
+  if (document.getElementById('page-log').classList.contains('active')) renderLog();
+  if (document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+  toast(dates.length === 1 ? 'Inquiry saved — date soft-locked!' : 'Inquiry saved — ' + dates.length + ' dates soft-locked!');
+}
+function editInquiry(id) {
+  var inq = inquiries.find(function(x) { return x.id === id; });
+  if (!inq) return;
+  editingInquiryId = id;
+  populateClientDropdowns();
+  var dates = (inq.dates && inq.dates.length) ? inq.dates : buildContiguousDates(inq.date, Math.max(1, Math.ceil(inq.days || 1)));
+  var fractions = (inq.dayFractions && inq.dayFractions.length === dates.length)
+    ? inq.dayFractions
+    : dates.map(function() { return 1; });
+  document.getElementById('inq-name').value        = inq.name;
+  document.getElementById('inq-days').value        = dates.length;
+  document.getElementById('inq-notes').value       = inq.notes || '';
+  document.getElementById('inq-client').value      = inq.clientId || '';
+  document.getElementById('inq-client-text').value = inq.clientName || '';
+  document.getElementById('inq-dates-wrap').innerHTML = '';
+  rebuildInquiryDates(false);
+  var dateInputs = document.querySelectorAll('#inq-dates-wrap input[type=date]');
+  var halfInputs = document.querySelectorAll('#inq-dates-wrap input[type=checkbox][data-half]');
+  dates.forEach(function(d, i) {
+    if (dateInputs[i]) dateInputs[i].value = d;
+    if (halfInputs[i]) halfInputs[i].checked = fractions[i] === 0.5;
+  });
+  document.getElementById('inq-modal-title').textContent = 'Edit Inquiry';
+  document.getElementById('btn-convert-inquiry').style.display = '';
+  document.getElementById('btn-release-inquiry').style.display = '';
+  document.getElementById('modal-inquiry').classList.add('open');
+}
+function deleteInquiry(id, skipConfirm) {
+  if (!skipConfirm && !confirm('Release these held dates? They become bookable again.')) return;
+  var inq = inquiries.find(function(x) { return x.id === id; });
+  if (inq) {
+    var ids = (inq.gcalEventIds || []).slice();
+    if (inq.gcalEventId) ids.push(inq.gcalEventId);
+    ids.forEach(function(evId) { deleteEventFromCalendar(evId); });
+  }
+  inquiries = inquiries.filter(function(x) { return x.id !== id; });
+  save(); refreshActive();
+  if (!skipConfirm) toast('Dates released.');
+}
+function convertInquiryToJob() {
+  var inq = inquiries.find(function(x) { return x.id === editingInquiryId; });
+  if (!inq) return;
+  // Delete all tentative calendar events — confirmed one(s) will be created for the job
+  var ids = (inq.gcalEventIds || []).slice();
+  if (inq.gcalEventId) ids.push(inq.gcalEventId);
+  ids.forEach(function(evId) { deleteEventFromCalendar(evId); });
+
+  var dates = (inq.dates && inq.dates.length) ? inq.dates.slice() : (inq.date ? [inq.date] : []);
+  var fractions = (inq.dayFractions && inq.dayFractions.length === dates.length)
+    ? inq.dayFractions.slice()
+    : dates.map(function() { return 1; });
+  // Sort dates and fractions together
+  var paired = dates.map(function(d, i) { return { date: d, frac: fractions[i] }; });
+  paired.sort(function(a,b) { return a.date < b.date ? -1 : 1; });
+  dates = paired.map(function(p) { return p.date; });
+  fractions = paired.map(function(p) { return p.frac; });
+  var firstDate = dates[0] || inq.date;
+  var totalDays = fractions.reduce(function(s, f) { return s + f; }, 0) || inq.days || 1;
+  var isContiguous = areDatesContiguous(dates);
+  var allFull = fractions.every(function(f) { return f === 1; });
+
+  var noteLines = [];
+  if (inq.clientName && !inq.clientId) noteLines.push('From inquiry — client: ' + inq.clientName);
+  if (dates.length > 1 && !isContiguous) noteLines.push('Confirmed dates (non-contiguous): ' + dates.map(function(d, i) { return d + (fractions[i] === 0.5 ? ' (½)' : ''); }).join(', '));
+  if (inq.notes) noteLines.push(inq.notes);
+
+  var job = {
+    id:       String(Date.now()),
+    name:     inq.name,
+    clientId: inq.clientId || '',
+    date:     firstDate,
+    dates:    dates.length > 1 ? dates : undefined,
+    dayFractions: (dates.length > 1 || !allFull) ? fractions : undefined,
+    type:     'Commercial',
+    days:     totalDays,
+    rate:     settings.dayrate || 0,
+    location: '',
+    notes:    noteLines.join('\n'),
+    status:   'completed',
+    gcalEventId: null,
+    gcalEventIds: []
+  };
+  logs.push(job);
+  inquiries = inquiries.filter(function(x) { return x.id !== inq.id; });
+  editingInquiryId = null;
+  save();
+  syncItemToCalendar(job, 'job');
+  closeModal('inquiry');
+  editingLogId = job.id;
+  editLog(job.id);
+  toast(dates.length > 1
+    ? 'Confirmed! ' + dates.length + ' date' + (dates.length !== 1 ? 's' : '') + ' now blocked.'
+    : 'Confirmed as job — please review details.');
+}
+var lineItems = [];
+var invoiceFilter = 'all';
+
+function prepareInvoiceModal() {
+  window._invoiceJobId = null;
+  var today = new Date().toISOString().slice(0,10);
+  var due   = new Date(Date.now() + (settings.due || 30) * 86400000).toISOString().slice(0,10);
+  var num   = 'INV-' + String(invoices.length + 1).padStart(4, '0');
+  document.getElementById('inv-number').value  = num;
+  document.getElementById('inv-date').value    = today;
+  document.getElementById('inv-due').value     = due;
+  document.getElementById('inv-project').value = '';
+  document.getElementById('inv-notes').value   = settings.terms || '';
+  document.getElementById('inv-status').value  = 'unpaid';
+  document.getElementById('inv-tax-pct').textContent = settings.taxrate || 18;
+  populateClientDropdowns();
+  lineItems = [{ desc:'', qty:1, rate: settings.dayrate || 0 }];
+  renderLineItems();
+}
+function addLineItem() { lineItems.push({ desc:'', qty:1, rate:0 }); renderLineItems(); }
+function removeLineItem(i) { lineItems.splice(i, 1); renderLineItems(); }
+function renderLineItems() {
+  var list = document.getElementById('line-items-list');
+  list.innerHTML = lineItems.map(function(li, i) {
+    return '<div class="line-item">' +
+      '<input value="' + (li.desc || '') + '" oninput="lineItems[' + i + '].desc=this.value" placeholder="e.g. Shoot Day — Director of Photography">' +
+      '<input type="number" value="' + li.qty + '" oninput="lineItems[' + i + '].qty=+this.value;updateTotals()" min="0.5" step="0.5">' +
+      '<input type="number" value="' + li.rate + '" oninput="lineItems[' + i + '].rate=+this.value;updateTotals()" min="0">' +
+      '<div class="line-item-total">' + settings.currency + ((li.qty || 0) * (li.rate || 0)).toLocaleString() + '</div>' +
+      '<button class="remove-line" onclick="removeLineItem(' + i + ')">&#215;</button>' +
+    '</div>';
+  }).join('');
+  updateTotals();
+}
+function updateTotals() {
+  var sub     = lineItems.reduce(function(s, li) { return s + (li.qty || 0) * (li.rate || 0); }, 0);
+  var taxRate = +(settings.taxrate || 0);
+  var tax     = sub * taxRate / 100;
+  var grand   = sub + tax;
+  var cur     = settings.currency;
+  document.getElementById('inv-subtotal').textContent = cur + sub.toLocaleString();
+  document.getElementById('inv-tax').textContent      = cur + Math.round(tax).toLocaleString();
+  document.getElementById('inv-grand').textContent    = cur + Math.round(grand).toLocaleString();
+  document.querySelectorAll('.line-item').forEach(function(row, i) {
+    var t = row.querySelector('.line-item-total');
+    if (t && lineItems[i]) t.textContent = cur + ((lineItems[i].qty || 0) * (lineItems[i].rate || 0)).toLocaleString();
+  });
+}
+function saveInvoice() {
+  var clientId = document.getElementById('inv-client').value;
+  if (!clientId) { toast('Please select a client', 'error'); return; }
+  var sub     = lineItems.reduce(function(s, li) { return s + (li.qty || 0) * (li.rate || 0); }, 0);
+  var taxRate = +(settings.taxrate || 0);
+  var tax     = sub * taxRate / 100;
+  var inv = {
+    id:        String(Date.now()),
+    number:    document.getElementById('inv-number').value,
+    clientId:  clientId,
+    project:   document.getElementById('inv-project').value,
+    date:      document.getElementById('inv-date').value,
+    due:       document.getElementById('inv-due').value,
+    status:    document.getElementById('inv-status').value,
+    lineItems: JSON.parse(JSON.stringify(lineItems)),
+    subtotal:  sub,
+    tax:       tax,
+    total:     sub + tax,
+    notes:     document.getElementById('inv-notes').value,
+    taxRate:   taxRate,
+    currency:  settings.currency,
+    createdAt: new Date().toISOString(),
+    jobId:     window._invoiceJobId || null
+  };
+  invoices.push(inv);
+  window._invoiceJobId = null;
+  save(); closeModal('invoice'); refreshActive();
+  toast('Invoice saved!');
+}
+function deleteInvoice(id) {
+  if (!confirm('Delete this invoice?')) return;
+  invoices = invoices.filter(function(x) { return x.id !== id; });
+  save(); refreshActive(); toast('Invoice deleted.');
+}
+function viewInvoice(id) {
+  var inv = invoices.find(function(x) { return x.id === id; });
+  if (!inv) return;
+  var cl  = clients.find(function(c) { return c.id === inv.clientId; });
+  var cur = inv.currency || settings.currency;
+  var biz = settings.biz || settings.name || 'Your Name';
+  var addrFormatted = (settings.address || '').replace(/\n/g, '<br>');
+  document.getElementById('invoice-preview-content').innerHTML =
+    '<div class="invoice-preview">' +
+      '<div class="inv-header">' +
+        '<div>' +
+          '<div class="inv-logo">' + biz + '</div>' +
+          '<div class="inv-logo-sub">' + (settings.name || '') + '</div>' +
+          '<div style="margin-top:10px;font-size:12px;color:#666;line-height:1.7;">' +
+            (settings.email || '') + '<br>' + (settings.phone || '') + '<br>' + addrFormatted +
+          '</div>' +
+          (settings.gst ? '<div style="font-size:11px;color:#999;margin-top:6px;">GSTIN: ' + settings.gst + '</div>' : '') +
+        '</div>' +
+        '<div class="inv-number">' +
+          '<div class="inv-number-label">Invoice</div>' +
+          '<div class="inv-number-val">' + inv.number + '</div>' +
+          '<div style="margin-top:8px;font-size:12px;color:#888;">Date: ' + (inv.date || '—') + '<br>Due: ' + (inv.due || '—') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inv-parties">' +
+        '<div><div class="inv-party-label">From</div><div class="inv-party-name">' + biz + '</div><div class="inv-party-detail">' + (settings.address || '') + '</div></div>' +
+        '<div><div class="inv-party-label">Bill To</div><div class="inv-party-name">' + (cl ? cl.name : '—') + '</div>' +
+          '<div class="inv-party-detail">' + (cl ? cl.contact || '' : '') + '<br>' + (cl ? cl.email || '' : '') + '<br>' + (cl ? cl.address || '' : '') + '</div>' +
+          (cl && cl.gst ? '<div style="font-size:11px;color:#999;margin-top:4px;">GSTIN: ' + cl.gst + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      (inv.project ? '<div style="margin-bottom:20px;font-size:13px;color:#666;"><strong>Project:</strong> ' + inv.project + '</div>' : '') +
+      '<table class="inv-table"><thead><tr><th>Description</th><th>Qty</th><th>Rate (' + cur + ')</th><th style="text-align:right">Total (' + cur + ')</th></tr></thead>' +
+        '<tbody>' +
+        (inv.lineItems || []).map(function(li) {
+          return '<tr><td>' + (li.desc || '—') + '</td><td>' + li.qty + '</td><td>' +
+            (+li.rate).toLocaleString() + '</td><td style="text-align:right">' +
+            ((li.qty || 0) * (li.rate || 0)).toLocaleString() + '</td></tr>';
+        }).join('') +
+        '</tbody></table>' +
+      '<div class="inv-totals">' +
+        '<div class="inv-total-row"><span>Subtotal</span><span>' + cur + (+inv.subtotal || 0).toLocaleString() + '</span></div>' +
+        '<div class="inv-total-row"><span>Tax (' + (inv.taxRate || 0) + '%)</span><span>' + cur + Math.round(+inv.tax || 0).toLocaleString() + '</span></div>' +
+        '<div class="inv-total-row grand"><span>Total</span><span>' + cur + Math.round(+inv.total || 0).toLocaleString() + '</span></div>' +
+      '</div>' +
+      (inv.notes ? '<div class="inv-footer">' + inv.notes + '</div>' : '') +
+    '</div>';
+  document.getElementById('modal-view-invoice').classList.add('open');
+}
+function printInvoice() {
+  var content = document.getElementById('invoice-preview-content').innerHTML;
+  var win = window.open('', '_blank');
+  win.document.write('<!DOCTYPE html><html><head><title>Invoice</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">' +
+    '<style>body{font-family:Outfit,sans-serif;padding:0;margin:0;}*{box-sizing:border-box;}</style>' +
+    '</head><body>' + content + '</body></html>');
+  win.document.close();
+  win.focus();
+  setTimeout(function() { win.print(); }, 500);
+}
+
+// ── CALENDAR ─────────────────────────────────────────────────────────
+var calCursor = new Date(); // reference date for the shown month
+calCursor.setDate(1);
+
+var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var DOW_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function calShift(delta) {
+  calCursor.setMonth(calCursor.getMonth() + delta);
+  renderCalendar();
+}
+function calToday() {
+  calCursor = new Date();
+  calCursor.setDate(1);
+  renderCalendar();
+}
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function dateKey(y, m, d) { return y + '-' + pad2(m + 1) + '-' + pad2(d); }
+
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function calOpenDay(key) {
+  window._calDayDate = key;
+  var dayItems = [];
+  logs.forEach(function(l) {
+    if (l.dates && l.dates.length > 1) {
+      if (l.dates.indexOf(key) !== -1) dayItems.push(Object.assign({}, l, { _kind:'job' }));
+    } else if (l.date === key) {
+      dayItems.push(Object.assign({}, l, { _kind:'job' }));
+    }
+  });
+  inquiries.forEach(function(inq) {
+    var dates = (inq.dates && inq.dates.length) ? inq.dates : buildContiguousDates(inq.date, inq.days);
+    if (dates.indexOf(key) !== -1) {
+      dayItems.push(Object.assign({}, inq, { _kind:'inquiry' }));
+    }
+  });
+  dayItems.sort(function(a,b) { return (a.name||'') < (b.name||'') ? -1 : 1; });
+
+  var parts = key.split('-');
+  var dateObj = new Date(+parts[0], +parts[1]-1, +parts[2]);
+  var label = DOW_NAMES[dateObj.getDay()] + ', ' + MONTH_NAMES[dateObj.getMonth()] + ' ' + dateObj.getDate() + ', ' + dateObj.getFullYear();
+  document.getElementById('cal-day-title').textContent = label;
+
+  var list = document.getElementById('cal-day-list');
+  if (!dayItems.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:30px 10px;"><p>Nothing on this day yet.</p></div>';
+  } else {
+    list.innerHTML = dayItems.map(function(l) {
+      var cl = clients.find(function(c) { return c.id === l.clientId; });
+      var isInq = l._kind === 'inquiry';
+      var earn = (l.days || 1) * (l.rate || 0);
+      var editFn = isInq ? 'editInquiry' : 'editLog';
+      var badge = isInq ? ' <span class="badge badge-inquiry" style="margin-left:8px;">Inquiry</span>' : '';
+      var meta = isInq
+        ? ((cl ? escapeHtml(cl.name) : (l.clientName ? escapeHtml(l.clientName) : 'Unassigned')) + ' · ' + ((l.dates && l.dates.length) || l.days) + ' day' + (((l.dates && l.dates.length) || l.days) !== 1 ? 's' : '') + ' soft-locked')
+        : ((cl ? escapeHtml(cl.name) + ' · ' : '') + escapeHtml(l.type || '') + ' · ' + l.days + ' day' + (l.days !== 1 ? 's' : ''));
+      return '<div class="cal-day-modal-item" onclick="closeModal(\'cal-day\');' + editFn + '(\'' + l.id + '\')">' +
+        '<div>' +
+          '<div class="cal-day-modal-item-name">' + escapeHtml(l.name) + badge + '</div>' +
+          '<div class="cal-day-modal-item-meta">' + meta + '</div>' +
+        '</div>' +
+        (isInq ? '<div style="color:var(--text3);font-size:11px;">tentative</div>' : '<div class="cal-day-modal-item-earn">' + settings.currency + earn.toLocaleString() + '</div>') +
+      '</div>';
+    }).join('');
+  }
+  document.getElementById('modal-cal-day').classList.add('open');
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────
+var revenueChartInst, statusChartInst, typeChartInst;
+
+function renderInsightStats() {
+  var box = document.getElementById('insight-stats');
+  if (!box) return;
+  var year = new Date().getFullYear(), t = todayIso();
+  var yr = yearStats(year);
+  var rated = logs.filter(function(l) { return (+l.rate || 0) > 0; });
+  var avgRate = rated.length ? Math.round(rated.reduce(function(s, l) { return s + (+l.rate || 0); }, 0) / rated.length) : 0;
+  var heldAhead = inquiries.reduce(function(s, i) { return s + itemDates(i).filter(function(d) { return d >= t; }).length; }, 0);
+  var best = null, bestVal = 0;
+  clients.forEach(function(c) {
+    var v = clientStats(c).billed;
+    if (v > bestVal) { bestVal = v; best = c; }
+  });
+  var cards = [
+    { label: 'Shoot days ' + year, value: String(yr.days), sub: fmtMoney(yr.earned) + ' billed value' },
+    { label: 'Average day rate', value: fmtMoney(avgRate), sub: rated.length + ' job' + (rated.length !== 1 ? 's' : '') + ' with a rate' },
+    { label: 'Days held ahead', value: String(heldAhead), sub: inquiries.length + ' open inquir' + (inquiries.length !== 1 ? 'ies' : 'y') },
+    { label: 'Biggest client', value: best ? shortMoney(bestVal) : '—', sub: best ? best.name : 'no paid invoices yet' }
+  ];
+  box.innerHTML = cards.map(function(c) {
+    return '<div class="stat-card"><div class="stat-label">' + c.label + '</div>' +
+      '<div class="stat-value">' + c.value + '</div><div class="stat-sub">' + escapeHtml(c.sub) + '</div></div>';
+  }).join('');
+}
+function renderAnalytics() {
+  renderInsightStats();
+  var year = new Date().getFullYear();
+  var today = new Date().toISOString().slice(0,10);
+  var cur = settings.currency;
+  document.getElementById('chart-year').textContent = year;
+  document.getElementById('type-year').textContent = year;
+
+  var paidInvs    = invoices.filter(function(i) { return i.status === 'paid'; });
+  var unpaidInvs  = invoices.filter(function(i) { return i.status === 'unpaid' && (!i.due || i.due >= today); });
+  var overdueInvs = invoices.filter(function(i) { return i.status === 'unpaid' && i.due && i.due < today; });
+  var draftInvs   = invoices.filter(function(i) { return i.status === 'draft'; });
+
+  // Monthly revenue bar chart
+  var months = [0,0,0,0,0,0,0,0,0,0,0,0];
+  invoices.forEach(function(inv) {
+    if ((inv.date || '').startsWith(String(year)) && inv.status === 'paid') {
+      var m = parseInt((inv.date || '').slice(5,7), 10) - 1;
+      if (m >= 0 && m < 12) months[m] += (+inv.total || 0);
+    }
+  });
+  var ctx1 = document.getElementById('revenueChart').getContext('2d');
+  if (revenueChartInst) revenueChartInst.destroy();
+  revenueChartInst = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      datasets: [{ data: months, backgroundColor:'rgba(232,201,122,0.3)', borderColor:'#e8c97a', borderWidth:1.5, borderRadius:6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false }, tooltip: { callbacks: { label: function(c) { return cur + c.raw.toLocaleString(); } } } },
+      scales: {
+        x: { grid: { color:'rgba(255,255,255,0.04)' }, ticks: { color:'#5a5855', font: { size:11 } } },
+        y: { grid: { color:'rgba(255,255,255,0.06)' }, ticks: { color:'#5a5855', font: { size:11 }, callback: function(v) { return cur + v.toLocaleString(); } } }
+      }
+    }
+  });
+
+  // Status donut chart
+  var ctx2 = document.getElementById('statusChart').getContext('2d');
+  if (statusChartInst) statusChartInst.destroy();
+  var counts = [paidInvs.length, unpaidInvs.length, overdueInvs.length, draftInvs.length];
+  statusChartInst = new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+      labels: ['Paid','Unpaid','Overdue','Draft'],
+      datasets: [{
+        data: counts,
+        backgroundColor: ['rgba(122,191,138,0.7)','rgba(232,201,122,0.7)','rgba(224,112,112,0.7)','rgba(90,88,85,0.5)'],
+        borderWidth: 0, borderRadius: 4, spacing: 3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '70%',
+      plugins: { legend: { position:'bottom', labels: { color:'#9e9b96', font:{ size:12 }, padding:12, usePointStyle:true, pointStyleWidth:8 } } }
+    }
+  });
+
+  // Jobs by type bar chart (year)
+  var typeCounts = {};
+  logs.forEach(function(l) {
+    if ((l.date || '').startsWith(String(year))) {
+      var t = l.type || 'Other';
+      typeCounts[t] = (typeCounts[t] || 0) + (+l.days || 1);
+    }
+  });
+  var typeLabels = Object.keys(typeCounts);
+  var typeData = typeLabels.map(function(k) { return typeCounts[k]; });
+  var ctx3 = document.getElementById('typeChart').getContext('2d');
+  if (typeChartInst) typeChartInst.destroy();
+  typeChartInst = new Chart(ctx3, {
+    type: 'bar',
+    data: {
+      labels: typeLabels.length ? typeLabels : ['No data'],
+      datasets: [{ label: 'Days worked', data: typeData.length ? typeData : [0], backgroundColor:'rgba(122,173,224,0.3)', borderColor:'#7aade0', borderWidth:1.5, borderRadius:6 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { grid: { color:'rgba(255,255,255,0.04)' }, ticks: { color:'#5a5855', font: { size:11 } } },
+        y: { grid: { color:'rgba(255,255,255,0.04)' }, ticks: { color:'#9e9b96', font: { size:12 } } }
+      }
+    }
+  });
+}
+
+
+// ── HELPERS ──────────────────────────────────────────────────────────
+function populateClientDropdowns() {
+  ['log-client','inv-client'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var cur = el.value;
+    el.innerHTML = '<option value="">— Select client —</option>' +
+      clients.map(function(c) {
+        return '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + c.name + '</option>';
+      }).join('');
+  });
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.set-currency-display').forEach(function(el) { el.textContent = settings.currency; });
+populateClientDropdowns();
+
+// Sample data for first-time users
+if (!clients.length && !logs.length && !invoices.length) {
+  var yr = new Date().getFullYear();
+  clients.push({ id:'c1', name:'Ogilvy India', contact:'Priya Sharma', email:'priya@ogilvy.in', phone:'+91 98200 11234', address:'Mumbai, Maharashtra', industry:'Advertising', gst:'', createdAt: new Date().toISOString(),
+    contacts:[{name:'Priya Sharma', role:'Producer'}, {name:'Devika Nair', role:'Executive producer'}] });
+  clients.push({ id:'c2', name:'Red Chillies Entertainment', contact:'Rohan Mehta', email:'rohan@redchillies.com', phone:'+91 99870 45678', address:'Mumbai, Maharashtra', industry:'Production House', gst:'', createdAt: new Date().toISOString(),
+    contacts:[{name:'Rohan Mehta', role:'Line producer'}] });
+  logs.push({ id:'l1', name:'Nike TVC - Hero Shoot', clientId:'c1', date: yr+'-02-14', type:'Commercial', days:3, rate:25000, location:'Mumbai', notes:'Alexa Mini LF. 2 camera setup.', status:'completed' });
+  logs.push({ id:'l2', name:'Corporate Brand Film',  clientId:'c2', date: yr+'-03-20', type:'Corporate',  days:2, rate:22000, location:'Delhi',  notes:'', status:'completed' });
+  logs.push({ id:'l3', name:'Music Video - Indie Band', clientId:'c1', date: yr+'-04-05', type:'Music Video', days:1.5, rate:20000, location:'Bangalore', notes:'Night shoot. BMPCC 6K.', status:'completed' });
+  var soon = new Date(Date.now() + 9 * 86400000).toISOString().slice(0,10);
+  inquiries.push({ id:'q1', name:'Puma campaign pitch', clientId:'', clientName:'Puma India', date: soon, days:2,
+    dates:[soon, new Date(Date.now() + 10 * 86400000).toISOString().slice(0,10)], notes:'Rate discussed, waiting on PO.',
+    status:'inquiry', createdAt: new Date(Date.now() - 7 * 86400000).toISOString() });
+  invoices.push({ id:'i1', number:'INV-0001', clientId:'c1', project:'Nike TVC', date: yr+'-02-18', due: yr+'-03-18', status:'paid', lineItems:[{desc:'Director of Photography - 3 Shoot Days',qty:3,rate:25000},{desc:'Equipment Package',qty:1,rate:15000}], subtotal:90000, tax:16200, total:106200, taxRate:18, currency:'₹', notes:'Thank you for your business!', createdAt: yr+'-02-18T00:00:00.000Z', jobId:'l1', paidAt: yr+'-03-10T00:00:00.000Z' });
+  invoices.push({ id:'i2', number:'INV-0002', clientId:'c2', project:'Brand Film Q1', date: yr+'-03-22', due: yr+'-04-22', status:'unpaid', lineItems:[{desc:'DOP - 2 Days',qty:2,rate:22000},{desc:'Color Grade',qty:1,rate:12000}], subtotal:56000, tax:10080, total:66080, taxRate:18, currency:'₹', notes:'Payment due within 30 days.', createdAt: yr+'-03-22T00:00:00.000Z', jobId:'l2' });
+  save();
+  populateClientDropdowns();
+}
+
+renderDashboard();
+renderCalendar();
+setTopbar('dashboard');
+updateNavCounts();
+
+// Auto-reconnect to Drive if previously connected
+if (settings.driveClientId && settings.driveConnected) {
+  var driveWait = setInterval(function() {
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+      clearInterval(driveWait);
+      initDriveClient();
+      // Silent token request (no popup if user has active Google session)
+      setTimeout(function() {
+        if (tokenClient) {
+          var origCb = tokenClient.callback;
+          tokenClient.callback = function(resp) {
+            tokenClient.callback = origCb;
+            if (resp.access_token) {
+              driveState.accessToken = resp.access_token;
+              driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
+              driveState.connected = true;
+              driveState.fileId = settings.driveFileId || null;
+              updateSyncStatus('Loading from Drive...');
+              loadFromDrive(false).then(function() {
+                if (settings.gcalSync !== false) {
+                  setTimeout(function() { pullFromCalendar(false); }, 500);
+                }
+              });
+            } else {
+              updateSyncStatus('Session expired — reconnect');
+            }
+          };
+          tokenClient.requestAccessToken({ prompt: '' });
+        }
+      }, 300);
+    }
+  }, 200);
+  setTimeout(function() { clearInterval(driveWait); }, 10000);
+}
+
+updateSyncStatus();
+
+// ── TWO-WAY: PULL FROM CALENDAR ON FOCUS ─────────────────────────────
+window.addEventListener('focus', function() {
+  if (driveState.connected && settings.gcalSync !== false) {
+    clearTimeout(pullTimer);
+    pullTimer = setTimeout(function() { pullFromCalendar(false); }, 800);
+  }
+});
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden && driveState.connected && settings.gcalSync !== false) {
+    clearTimeout(pullTimer);
+    pullTimer = setTimeout(function() { pullFromCalendar(false); }, 800);
+  }
+});
+
+// ── PWA / OFFLINE SUPPORT ────────────────────────────────────────────
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  var swCode = "\
+var CACHE = 'cinework-v1';\
+self.addEventListener('install', function(e) { self.skipWaiting(); });\
+self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });\
+self.addEventListener('fetch', function(e) {\
+  if (e.request.method !== 'GET') return;\
+  var url = e.request.url;\
+  if (url.indexOf('googleapis.com') !== -1 || url.indexOf('accounts.google.com') !== -1) return;\
+  e.respondWith(\
+    caches.open(CACHE).then(function(cache) {\
+      return cache.match(e.request).then(function(cached) {\
+        var fetchPromise = fetch(e.request).then(function(resp) {\
+          if (resp && resp.status === 200) cache.put(e.request, resp.clone());\
+          return resp;\
+        }).catch(function() { return cached; });\
+        return cached || fetchPromise;\
+      });\
+    })\
+  );\
+});";
+  try {
+    var swBlob = new Blob([swCode], { type: 'application/javascript' });
+    var swUrl = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl).catch(function(e) { console.log('SW register failed:', e); });
+  } catch(e) { console.log('SW setup failed:', e); }
+}
+</script>
+</body>
+</html>
