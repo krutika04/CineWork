@@ -383,6 +383,9 @@
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.success { border-color: rgba(122,191,138,0.5); color: var(--green); }
   .toast.error { border-color: rgba(224,112,112,0.5); color: var(--red); }
+  .req { color: var(--red); margin-left: 3px; font-size: 12px; }
+  .req-legend { font-size: 11.5px; color: var(--text3); align-self: center; margin-left: auto; }
+  .field-hint { font-size: 11.5px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
   .lock-note {
     display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px 14px;
     background: var(--sunk); border: 1px solid var(--line-gold); border-radius: var(--radius);
@@ -576,12 +579,7 @@
           <span>&#8981;</span>
           <input type="text" id="log-search" placeholder="Search jobs, clients, locations&hellip;" oninput="renderWork()">
         </div>
-        <select id="log-filter-type" class="select-sm" onchange="renderWork()">
-          <option value="">All types</option>
-          <option>Commercial</option><option>Film</option><option>Documentary</option>
-          <option>Wedding</option><option>Event</option><option>Music Video</option>
-          <option>Corporate</option><option>Photography</option><option>Other</option>
-        </select>
+        <select id="log-filter-type" class="select-sm" onchange="renderWork()"><option value="">All types</option></select>
         <select id="log-filter-year" class="select-sm" onchange="renderWork()">
           <option value="">All years</option>
         </select>
@@ -620,7 +618,7 @@
           <button class="chip" data-status="overdue" onclick="filterInvoices('overdue')">Overdue</button>
           <button class="chip" data-status="paid" onclick="filterInvoices('paid')">Paid</button>
         </div>
-        <button class="btn btn-primary" onclick="openModal('invoice')">New invoice</button>
+        <button class="btn btn-primary" onclick="openJobPicker()">Generate invoice</button>
       </div>
 
       <section class="rows">
@@ -663,7 +661,8 @@
         <h2>Excel is the source of truth</h2>
         <p style="font-size:13px;color:var(--text2);line-height:1.6;">
           Every save writes <span class="mono" style="color:var(--accent);">CineWork-Data.xlsx</span> to your Google Drive;
-          every open reads it back. Google Calendar stays two-way &mdash; confirmed jobs as busy events, inquiries as tentative.
+          every open reads it back. Each invoice you save is also filed as its own document in a
+          <span class="mono" style="color:var(--accent);">CineWork Invoices</span> folder. Google Calendar stays two-way &mdash; confirmed jobs as busy events, inquiries as tentative.
         </p>
         <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
           <div class="status-pill" id="pill-drive"><span class="dot"></span><span>Drive not connected</span></div>
@@ -750,6 +749,25 @@
   <button class="mtab" data-page="settings" onclick="navigate('settings')"><span class="mtab-mark">&#9881;</span>More</button>
 </nav>
 
+<datalist id="dl-clients"></datalist>
+<datalist id="dl-locations"></datalist>
+
+<!-- GENERATE INVOICE: PICK A JOB -->
+<div class="modal-overlay" id="modal-pick-job">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title">Generate invoice</div>
+      <button class="modal-close" onclick="closeModal('pick-job')">&#215;</button>
+    </div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:18px;">Pick the job you're billing for. Client, dates, days and day rate carry across — nothing typed twice.</p>
+    <div id="job-picker-list"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="closeModal('pick-job');openModal('invoice')">Blank invoice instead</button>
+      <button class="btn btn-secondary" onclick="closeModal('pick-job')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOG JOB MODAL -->
 <div class="modal-overlay" id="modal-log">
   <div class="modal">
@@ -758,23 +776,24 @@
       <button class="modal-close" onclick="closeModal('log')">&#215;</button>
     </div>
     <div class="form-grid">
-      <div class="form-group"><label>Job / Project Name</label><input id="log-name" placeholder="e.g. Nike TVC Shoot"></div>
-      <div class="form-group"><label>Client</label>
-        <select id="log-client"><option value="">— Select client —</option></select>
+      <div class="form-group"><label>Job / Project Name<span class="req">*</span></label><input id="log-name" placeholder="e.g. Nike TVC Shoot"></div>
+      <div class="form-group"><label>Client<span class="req">*</span></label>
+        <input id="log-client" list="dl-clients" autocomplete="off" placeholder="Type a name — new ones are created">
       </div>
-      <div class="form-group"><label>Days Worked</label><input id="log-days" type="number" min="1" step="1" value="1" oninput="rebuildJobDates(true)"></div>
-      <div class="form-group"><label>Job Type</label>
-        <select id="log-type">
-          <option>Commercial</option><option>Film</option><option>Documentary</option>
-          <option>Wedding</option><option>Event</option><option>Music Video</option>
-          <option>Corporate</option><option>Photography</option><option>Other</option>
-        </select>
+      <div class="form-group"><label>Days Worked<span class="req">*</span></label><input id="log-days" type="number" min="1" step="1" value="1" oninput="rebuildJobDates(true)"></div>
+      <div class="form-group"><label>Job Type<span class="req">*</span></label>
+        <select id="log-type"><!-- populated from JOB_TYPES --></select>
       </div>
       <div class="form-group full" id="log-dates-wrap"><!-- populated dynamically --></div>
       <div class="form-group"><label>Day Rate (<span class="set-currency-display">&#8377;</span>)</label><input id="log-rate" type="number" placeholder="0"></div>
-      <div class="form-group"><label>Location</label><input id="log-location" placeholder="City or location"></div>
+      <div class="form-group"><label>Location</label><input id="log-location" list="dl-locations" placeholder="City or location"></div>
       <div class="form-group"><label>Status</label>
-        <select id="log-status"><option value="completed">Completed</option><option value="ongoing">Ongoing</option><option value="cancelled">Cancelled</option></select>
+        <select id="log-status">
+          <option value="confirmed">Confirmed</option>
+          <option value="ongoing">Shooting now</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
       <div class="form-group"><!-- spacer --></div>
       <div class="form-group full"><label>Notes</label><textarea id="log-notes" placeholder="Equipment, crew, special notes..."></textarea></div>
@@ -784,6 +803,7 @@
       <button class="btn btn-secondary" onclick="closeModal('log')">Cancel</button>
       <button class="btn btn-quiet" id="btn-cancel-job" onclick="toggleJobCancelled()" style="display:none;">Job fell through</button>
       <button class="btn btn-danger" id="btn-delete-job" onclick="deleteJobFromModal()" style="display:none;">Delete job</button>
+      <span class="req-legend"><span class="req">*</span> required</span>
     </div>
     <div class="lock-note" id="job-lock-note" style="display:none;"></div>
   </div>
@@ -797,7 +817,7 @@
       <button class="modal-close" onclick="closeModal('client')">&#215;</button>
     </div>
     <div class="form-grid">
-      <div class="form-group"><label>Client / Company Name</label><input id="cl-name" placeholder="e.g. Ogilvy India"></div>
+      <div class="form-group"><label>Client / Company Name<span class="req">*</span></label><input id="cl-name" placeholder="e.g. Ogilvy India"></div>
       <div class="form-group"><label>Contact Person</label><input id="cl-contact" placeholder="Full name"></div>
       <div class="form-group"><label>Email</label><input id="cl-email" type="email" placeholder="contact@company.com"></div>
       <div class="form-group"><label>Phone</label><input id="cl-phone" placeholder="+91 …"></div>
@@ -819,6 +839,7 @@
     <div class="btn-group">
       <button class="btn btn-primary" onclick="saveClient()">Save client</button>
       <button class="btn btn-secondary" onclick="closeModal('client')">Cancel</button>
+      <span class="req-legend"><span class="req">*</span> required</span>
     </div>
   </div>
 </div>
@@ -831,17 +852,21 @@
       <button class="modal-close" onclick="closeModal('invoice')">&#215;</button>
     </div>
     <div class="form-grid" style="margin-bottom:20px;">
-      <div class="form-group"><label>Invoice Number</label><input id="inv-number" placeholder="Auto-generated"></div>
-      <div class="form-group"><label>Client</label><select id="inv-client"><option value="">— Select client —</option></select></div>
+      <div class="form-group full"><label>Job / Project<span class="req">*</span></label>
+        <select id="inv-job" onchange="prefillInvoiceFromJob()"><option value="">— Not linked to a job —</option></select>
+        <div class="field-hint" id="inv-job-hint">Pick the job and the client, dates, days and rate fill themselves in.</div>
+      </div>
+      <div class="form-group"><label>Invoice Number<span class="req">*</span></label><input id="inv-number" placeholder="Auto-generated"></div>
+      <div class="form-group"><label>Client<span class="req">*</span></label><input id="inv-client" list="dl-clients" autocomplete="off" placeholder="Type a name — new ones are created"></div>
       <div class="form-group"><label>Invoice Date</label><input id="inv-date" type="date"></div>
       <div class="form-group"><label>Due Date</label><input id="inv-due" type="date"></div>
-      <div class="form-group"><label>Project / Reference</label><input id="inv-project" placeholder="Project name or PO number"></div>
+      <div class="form-group"><label>Project / Reference<span class="req">*</span></label><input id="inv-project" placeholder="Project name or PO number"></div>
       <div class="form-group"><label>Status</label>
         <select id="inv-status"><option value="draft">Draft</option><option value="unpaid">Unpaid / Sent</option><option value="paid">Paid</option></select>
       </div>
     </div>
     <div class="divider"></div>
-    <h3 style="margin-bottom:12px;">Line Items</h3>
+    <h3 style="margin-bottom:12px;">Line Items<span class="req">*</span></h3>
     <div class="line-items-header">
       <span>Description</span><span>Qty/Days</span>
       <span>Rate (<span class="set-currency-display">&#8377;</span>)</span>
@@ -861,6 +886,7 @@
     <div class="btn-group">
       <button class="btn btn-primary" onclick="saveInvoice()">Save invoice</button>
       <button class="btn btn-secondary" onclick="closeModal('invoice')">Cancel</button>
+      <span class="req-legend"><span class="req">*</span> required · saved invoices are filed to Drive</span>
     </div>
   </div>
 </div>
@@ -871,6 +897,7 @@
     <div class="modal-header">
       <div class="modal-title">Invoice Preview</div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-sm btn-secondary" id="btn-invoice-drive" onclick="saveViewedInvoiceToDrive()">Save to Drive</button>
         <button class="btn btn-sm btn-primary" onclick="printInvoice()">Print / PDF</button>
         <button class="modal-close" onclick="closeModal('view-invoice')">&#215;</button>
       </div>
@@ -888,12 +915,11 @@
     </div>
     <p style="color:var(--text2);font-size:13px;margin-bottom:20px;">Soft-lock these dates on your calendar until the project is confirmed.</p>
     <div class="form-grid">
-      <div class="form-group full"><label>Project / Inquiry Name</label><input id="inq-name" placeholder="e.g. Puma campaign pitch"></div>
-      <div class="form-group"><label>Client (optional)</label>
-        <select id="inq-client"><option value="">— None / New —</option></select>
+      <div class="form-group full"><label>Project / Inquiry Name<span class="req">*</span></label><input id="inq-name" placeholder="e.g. Puma campaign pitch"></div>
+      <div class="form-group"><label>Client</label>
+        <input id="inq-client-text" list="dl-clients" autocomplete="off" placeholder="e.g. Puma India">
       </div>
-      <div class="form-group"><label>Or type a name</label><input id="inq-client-text" placeholder="e.g. Puma India"></div>
-      <div class="form-group"><label>How many days?</label><input id="inq-days" type="number" min="1" step="1" value="1" oninput="rebuildInquiryDates(true)"></div>
+      <div class="form-group"><label>How many days?<span class="req">*</span></label><input id="inq-days" type="number" min="1" step="1" value="1" oninput="rebuildInquiryDates(true)"></div>
       <div class="form-group"><!-- spacer --></div>
       <div class="form-group full" id="inq-dates-wrap"></div>
       <div class="form-group full"><label>Notes</label><textarea id="inq-notes" rows="2" placeholder="Rate discussion, references, next steps..."></textarea></div>
@@ -903,6 +929,7 @@
       <button class="btn btn-secondary" id="btn-convert-inquiry" onclick="convertInquiryToJob()" style="display:none;">Confirm as job &#8594;</button>
       <button class="btn btn-secondary" onclick="closeModal('inquiry')">Cancel</button>
       <button class="btn btn-danger" id="btn-release-inquiry" onclick="releaseInquiry()" style="display:none;">Release dates</button>
+      <span class="req-legend"><span class="req">*</span> required</span>
     </div>
   </div>
 </div>
@@ -1488,31 +1515,6 @@ function markPaid(id) {
   toast('Marked as paid!');
 }
 
-// Job → invoice, prefilled. "Nothing typed twice."
-function invoiceFromJob(jobId) {
-  var job = logs.find(function(l) { return l.id === jobId; });
-  if (!job) { toast('Job not found', 'error'); return; }
-  var existing = jobInvoice(job);
-  if (existing) { viewInvoice(existing.id); return; }
-  openModal('invoice');
-  var dates = itemDates(job);
-  var dayCount = +job.days || dates.length || 1;
-  var lastDate = dates.length ? dates[dates.length - 1] : (job.date || todayIso());
-  document.getElementById('inv-client').value = job.clientId || '';
-  document.getElementById('inv-project').value = job.name || '';
-  document.getElementById('inv-date').value = lastDate;
-  document.getElementById('inv-due').value =
-    new Date(new Date(lastDate).getTime() + (settings.due || 30) * 86400000).toISOString().slice(0, 10);
-  document.getElementById('inv-status').value = 'unpaid';
-  lineItems = [{
-    desc: (job.type || 'Shoot') + ' — ' + (job.name || 'Job') + ' (' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ')',
-    qty: dayCount,
-    rate: +job.rate || settings.dayrate || 0
-  }];
-  renderLineItems();
-  window._invoiceJobId = job.id;
-  if (!job.clientId) toast('Pick a client for this invoice', 'error');
-}
 function wrapAndInvoice(jobId) {
   var job = logs.find(function(l) { return l.id === jobId; });
   if (!job) return;
@@ -1964,6 +1966,267 @@ function releaseInquiry() {
   closeModal('inquiry');
   deleteInquiry(id, true);
   toast('Dates released.');
+}
+
+// ── JOB TYPES ────────────────────────────────────────────────────────
+var JOB_TYPES = ['Ad', 'Promo', 'Short Film', 'TV Series', 'Film', 'Music Video'];
+var DEFAULT_LOCATIONS = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Hyderabad'];
+// Only the listed types are offered. A job saved under an older type keeps it
+// until you change it, so editing an old record can't silently retype it.
+function populateTypeOptions(currentValue) {
+  var sel = document.getElementById('log-type');
+  if (sel) {
+    var keep = currentValue || sel.value;
+    var types = JOB_TYPES.slice();
+    if (keep && types.indexOf(keep) === -1) types.push(keep);
+    sel.innerHTML = types.map(function(t) {
+      return '<option' + (t === keep ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+    }).join('');
+  }
+  var filter = document.getElementById('log-filter-type');
+  if (filter) {
+    var keepF = filter.value;
+    var fTypes = JOB_TYPES.slice();
+    logs.concat(inquiries).forEach(function(l) {
+      if (l.type && fTypes.indexOf(l.type) === -1) fTypes.push(l.type);
+    });
+    filter.innerHTML = '<option value="">All types</option>' + fTypes.map(function(t) {
+      return '<option' + (t === keepF ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+    }).join('');
+  }
+}
+function defaultLocation() {
+  var city = (settings.address || '').split(/[,\n]/)[0].trim();
+  return city || DEFAULT_LOCATIONS[0];
+}
+
+// ── CLIENT NAMES: TITLE CASE, ACRONYMS IN CAPS ───────────────────────
+var CLIENT_SMALL_WORDS = { of: 1, and: 1, the: 1, for: 1, in: 1, on: 1, at: 1, to: 1, '&': 1 };
+// short words that are words, not initialisms — kept out of the caps rule
+var CLIENT_NOT_ACRONYM = { sun: 1, red: 1, box: 1, art: 1, ace: 1, one: 1, two: 1, six: 1, big: 1,
+  new: 1, old: 1, top: 1, sky: 1, sea: 1, day: 1, eye: 1, fox: 1, owl: 1, ink: 1, oak: 1, bee: 1,
+  raw: 1, hot: 1, mad: 1, co: 1, its: 1, our: 1, out: 1, off: 1, own: 1, wild: 1, blue: 1, gold: 1, iron: 1, film: 1, films: 1, star: 1, moon: 1,
+  jump: 1, leap: 1, dot: 1, air: 1, arc: 1, bay: 1, cut: 1, run: 1, yes: 1, why: 1, now: 1 };
+function normalizeClientName(raw) {
+  var s = (raw || '').trim().replace(/\s+/g, ' ');
+  if (!s) return '';
+  return s.split(' ').map(function(w, i) {
+    var letters = w.replace(/[^A-Za-z]/g, '');
+    var low = w.toLowerCase();
+    if (!letters) return w;
+    // already typed as an initialism — leave it alone
+    if (w === w.toUpperCase() && letters.length <= 6) return w;
+    var vowels = (letters.match(/[aeiou]/gi) || []).length;
+    // short and vowel-poor reads as a short form: ddb, bbdo, tbwa, jwt, vml
+    if (!CLIENT_NOT_ACRONYM[low] && letters.length <= 4 && vowels <= 1) return w.toUpperCase();
+    if (i > 0 && CLIENT_SMALL_WORDS[low]) return low;
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
+function findClientByName(name) {
+  var n = (name || '').trim().toLowerCase();
+  if (!n) return null;
+  return clients.find(function(c) { return (c.name || '').trim().toLowerCase() === n; }) || null;
+}
+// Typing a name that doesn't exist creates the client (when create is true).
+function resolveClientRef(raw, create) {
+  var typed = (raw || '').trim();
+  if (!typed) return { id: '', name: '' };
+  var hit = findClientByName(typed);
+  if (hit) return { id: hit.id, name: hit.name };
+  var name = normalizeClientName(typed);
+  hit = findClientByName(name);
+  if (hit) return { id: hit.id, name: hit.name };
+  if (!create) return { id: '', name: name };
+  var c = {
+    id: 'c' + Date.now(), name: name, contact: '', email: '', phone: '',
+    address: '', gst: '', industry: '', contacts: [], createdAt: new Date().toISOString()
+  };
+  clients.push(c);
+  populateClientDropdowns();
+  toast('New client added: ' + name);
+  return { id: c.id, name: c.name };
+}
+function populateClientDropdowns() {
+  var dl = document.getElementById('dl-clients');
+  if (dl) {
+    dl.innerHTML = clients.slice().sort(function(a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; })
+      .map(function(c) { return '<option value="' + escapeHtml(c.name) + '"></option>'; }).join('');
+  }
+  var dlLoc = document.getElementById('dl-locations');
+  if (dlLoc) {
+    var locs = DEFAULT_LOCATIONS.slice();
+    var seen = {};
+    locs.forEach(function(v) { seen[v.toLowerCase()] = 1; });
+    logs.forEach(function(l) {
+      var v = (l.location || '').trim();
+      if (v && !seen[v.toLowerCase()]) { seen[v.toLowerCase()] = 1; locs.push(v); }
+    });
+    dlLoc.innerHTML = locs.map(function(v) { return '<option value="' + escapeHtml(v) + '"></option>'; }).join('');
+  }
+  populateJobSelect();
+}
+
+// ── INVOICE ↔ JOB ────────────────────────────────────────────────────
+function populateJobSelect() {
+  var sel = document.getElementById('inv-job');
+  if (!sel) return;
+  var keep = sel.value;
+  var sorted = logs.slice().sort(function(a, b) { return (b.date || '') < (a.date || '') ? -1 : 1; });
+  sel.innerHTML = '<option value="">— Not linked to a job —</option>' + sorted.map(function(l) {
+    var inv = jobInvoice(l);
+    var label = (l.name || 'Untitled') + ' · ' + (clientNameOf(l) || 'no client') + ' · ' + dateRangeLabel(itemDates(l));
+    if (inv) label += ' · already on ' + inv.number;
+    return '<option value="' + l.id + '"' + (l.id === keep ? ' selected' : '') + (inv && l.id !== keep ? ' disabled' : '') + '>' +
+      escapeHtml(label) + '</option>';
+  }).join('');
+  if (keep) sel.value = keep;
+}
+function fillInvoiceFieldsFromJob(jobId) {
+  var job = logs.find(function(l) { return l.id === jobId; });
+  if (!job) return;
+  var dates = itemDates(job);
+  var dayCount = +job.days || dates.length || 1;
+  var lastDate = dates.length ? dates[dates.length - 1] : (job.date || todayIso());
+  document.getElementById('inv-client').value  = clientNameOf(job) || '';
+  document.getElementById('inv-project').value = job.name || '';
+  document.getElementById('inv-date').value    = lastDate;
+  document.getElementById('inv-due').value     =
+    new Date(new Date(lastDate).getTime() + (settings.due || 30) * 86400000).toISOString().slice(0, 10);
+  document.getElementById('inv-status').value  = 'unpaid';
+  lineItems = [{
+    desc: (job.type || 'Shoot') + ' — ' + (job.name || 'Job') +
+          (job.location ? ', ' + job.location : '') +
+          ' (' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ')',
+    qty: dayCount,
+    rate: +job.rate || settings.dayrate || 0
+  }];
+  renderLineItems();
+  window._invoiceJobId = job.id;
+  var hint = document.getElementById('inv-job-hint');
+  if (hint) hint.textContent = dateRangeLabel(dates) + ' · ' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') +
+    ' at ' + fmtMoney(+job.rate || settings.dayrate || 0) + ' — edit the lines below if the deal was different.';
+}
+function prefillInvoiceFromJob() {
+  var sel = document.getElementById('inv-job');
+  if (!sel) return;
+  if (!sel.value) {
+    window._invoiceJobId = null;
+    var hint = document.getElementById('inv-job-hint');
+    if (hint) hint.textContent = 'Pick the job and the client, dates, days and rate fill themselves in.';
+    return;
+  }
+  fillInvoiceFieldsFromJob(sel.value);
+}
+function invoiceFromJob(jobId) {
+  var job = logs.find(function(l) { return l.id === jobId; });
+  if (!job) { toast('Job not found', 'error'); return; }
+  var existing = jobInvoice(job);
+  if (existing) { viewInvoice(existing.id); return; }
+  openModal('invoice');
+  populateJobSelect();
+  var sel = document.getElementById('inv-job');
+  if (sel) sel.value = jobId;
+  fillInvoiceFieldsFromJob(jobId);
+}
+function openJobPicker() {
+  var list = document.getElementById('job-picker-list');
+  var open = logs.filter(function(l) { return l.status !== 'cancelled' && !jobInvoice(l); })
+    .sort(function(a, b) { return (b.date || '') < (a.date || '') ? -1 : 1; });
+  if (!open.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:24px 10px;"><p>Every job is already invoiced. Start a blank invoice below.</p></div>';
+  } else {
+    list.innerHTML = open.map(function(l) {
+      var dates = itemDates(l);
+      var dayCount = +l.days || dates.length || 1;
+      return '<div class="cal-day-modal-item" onclick="closeModal(\'pick-job\');invoiceFromJob(\'' + l.id + '\')">' +
+        '<div style="min-width:0;">' +
+          '<div class="cal-day-modal-item-name">' + escapeHtml(l.name || 'Untitled') + '</div>' +
+          '<div class="cal-day-modal-item-meta">' + escapeHtml(clientNameOf(l) || 'no client') + ' · ' +
+            dateRangeLabel(dates) + ' · ' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') + '</div>' +
+        '</div>' +
+        '<div class="cal-day-modal-item-earn">' + fmtMoney(dayCount * (+l.rate || 0)) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  document.getElementById('modal-pick-job').classList.add('open');
+}
+
+// ── INVOICES FILED TO GOOGLE DRIVE ───────────────────────────────────
+var INVOICE_FOLDER_NAME = 'CineWork Invoices';
+function ensureInvoiceFolder(token) {
+  if (settings.invoiceFolderId) return Promise.resolve(settings.invoiceFolderId);
+  var q = encodeURIComponent("name='" + INVOICE_FOLDER_NAME + "' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  return fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)', {
+    headers: { Authorization: 'Bearer ' + token }
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.files && d.files.length) return d.files[0].id;
+    return fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: INVOICE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    }).then(function(r) { return r.json(); }).then(function(f) { return f.id; });
+  }).then(function(id) {
+    settings.invoiceFolderId = id;
+    DB.set('settings', settings);
+    return id;
+  });
+}
+function invoiceDocName(inv) {
+  var cl = clients.find(function(c) { return c.id === inv.clientId; });
+  return [inv.number, (cl && cl.name) || 'Client', inv.project || 'Invoice'].join(' — ');
+}
+function uploadInvoiceToDrive(inv, loud) {
+  if (!driveState.connected) {
+    if (loud) toast('Connect Drive first', 'error');
+    return Promise.resolve();
+  }
+  updateSyncStatus('Filing invoice...');
+  return ensureToken().then(function(token) {
+    return ensureInvoiceFolder(token).then(function(folderId) {
+      var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(invoiceDocName(inv)) + '</title></head>' +
+        '<body style="font-family:Arial,Helvetica,sans-serif;">' + invoiceHtmlFor(inv) + '</body></html>';
+      var meta = inv.driveFileId
+        ? { name: invoiceDocName(inv) }
+        : { name: invoiceDocName(inv), mimeType: 'application/vnd.google-apps.document', parents: [folderId] };
+      var form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+      form.append('file', new Blob([html], { type: 'text/html' }));
+      var url = 'https://www.googleapis.com/upload/drive/v3/files' +
+        (inv.driveFileId ? '/' + inv.driveFileId : '') + '?uploadType=multipart&fields=id,webViewLink';
+      return fetch(url, {
+        method: inv.driveFileId ? 'PATCH' : 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: form
+      });
+    });
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+    return r.json();
+  }).then(function(f) {
+    inv.driveFileId = f.id;
+    inv.driveLink = f.webViewLink || ('https://drive.google.com/open?id=' + f.id);
+    DB.set('invoices', invoices);
+    updateSyncStatus();
+    if (loud !== false) toast('Filed to Drive → ' + INVOICE_FOLDER_NAME);
+    var cur = invoices.find(function(x) { return x.id === window._viewingInvoiceId; });
+    if (cur) updateInvoiceDriveBtn(cur);
+  }).catch(function(e) {
+    console.error(e);
+    updateSyncStatus();
+    toast('Drive filing failed: ' + e.message, 'error');
+  });
+}
+function updateInvoiceDriveBtn(inv) {
+  var btn = document.getElementById('btn-invoice-drive');
+  if (!btn) return;
+  btn.textContent = inv && inv.driveLink ? 'Open in Drive' : 'Save to Drive';
+}
+function saveViewedInvoiceToDrive() {
+  var inv = invoices.find(function(x) { return x.id === window._viewingInvoiceId; });
+  if (!inv) return;
+  if (inv.driveLink) { window.open(inv.driveLink, '_blank'); return; }
+  uploadInvoiceToDrive(inv, true);
 }
 
 
@@ -2817,7 +3080,7 @@ function rebuildJobDates(preserveExisting) {
     wrap.querySelectorAll('input[type=checkbox][data-half]').forEach(function(cb) { existingHalves.push(cb.checked); });
   }
   var label = days === 1 ? 'Date' : days + ' shoot dates';
-  var html = '<label>' + label + '</label>';
+  var html = '<label>' + label + '<span class="req">*</span></label>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">';
   for (var i = 0; i < days; i++) {
     var val = existingDates[i] || '';
@@ -2846,14 +3109,16 @@ function prepareLogModal() {
   document.getElementById('log-name').value     = '';
   document.getElementById('log-days').value     = '1';
   document.getElementById('log-rate').value     = settings.dayrate || '';
-  document.getElementById('log-location').value = '';
+  document.getElementById('log-location').value = defaultLocation();
+  document.getElementById('log-client').value   = '';
   document.getElementById('log-notes').value    = '';
-  document.getElementById('log-status').value   = 'completed';
+  document.getElementById('log-status').value   = 'confirmed';
   ['btn-delete-job', 'btn-cancel-job'].forEach(function(bid) {
     var b = document.getElementById(bid);
     if (b) b.style.display = 'none';
   });
-  document.getElementById('log-type').value     = 'Commercial';
+  populateTypeOptions();
+  document.getElementById('log-type').value     = JOB_TYPES[0];
   populateClientDropdowns();
   document.getElementById('log-dates-wrap').innerHTML = '';
   rebuildJobDates(false);
@@ -2867,7 +3132,9 @@ function prepareLogModal() {
 }
 function saveLog() {
   var name = document.getElementById('log-name').value.trim();
-  if (!name) { toast('Job name required', 'error'); return; }
+  if (!name) { toast('Job name is required', 'error'); return; }
+  var clientRaw = document.getElementById('log-client').value.trim();
+  if (!clientRaw) { toast('Client is required — type a new name and it gets created', 'error'); return; }
   var rows = document.querySelectorAll('#log-dates-wrap > div > div');
   var dateInputs = document.querySelectorAll('#log-dates-wrap input[type=date]');
   var halfInputs = document.querySelectorAll('#log-dates-wrap input[type=checkbox][data-half]');
@@ -2888,7 +3155,7 @@ function saveLog() {
   var entry = {
     id:       editingLogId || String(Date.now()),
     name:     name,
-    clientId: document.getElementById('log-client').value,
+    clientId: resolveClientRef(clientRaw, true).id,
     dates:    dates,
     dayFractions: dayFractions,
     date:     dates[0],           // for sorting / backward compat
@@ -2910,9 +3177,9 @@ function saveLog() {
   save();
   syncItemToCalendar(entry, 'job');
   closeModal('log');
-  renderLog();
-  if (document.getElementById('page-dashboard').classList.contains('active')) { renderDashboard(); renderCalendar(); }
-  toast('Job logged!');
+  populateClientDropdowns();
+  refreshActive();
+  toast('Job saved!');
 }
 function editLog(id) {
   var l = logs.find(function(x) { return x.id === id; });
@@ -2932,7 +3199,8 @@ function editLog(id) {
   document.getElementById('log-notes').value    = l.notes    || '';
   document.getElementById('log-status').value   = l.status   || 'completed';
   populateClientDropdowns();
-  document.getElementById('log-client').value = l.clientId || '';
+  document.getElementById('log-client').value = clientNameOf(l) || '';
+  populateTypeOptions(l.type || JOB_TYPES[0]);
   document.getElementById('log-dates-wrap').innerHTML = '';
   rebuildJobDates(false);
   var dateInputs = document.querySelectorAll('#log-dates-wrap input[type=date]');
@@ -3023,7 +3291,7 @@ function prepareInquiryModal() {
   document.getElementById('btn-convert-inquiry').style.display = 'none';
   document.getElementById('btn-release-inquiry').style.display = 'none';
   populateClientDropdowns();
-  document.getElementById('inq-client').value = '';
+  populateClientDropdowns();
   // If opened from a calendar day, use that as day 1; else tomorrow
   var seedDate = window._calDayDate || tomorrowIso();
   // Clear the date wrap then rebuild with seeded first date
@@ -3036,7 +3304,8 @@ function prepareInquiryModal() {
 
 function saveInquiry() {
   var name = document.getElementById('inq-name').value.trim();
-  if (!name) { toast('Inquiry name required', 'error'); return; }
+  if (!name) { toast('Inquiry name is required', 'error'); return; }
+  var inqClientRef = resolveClientRef(document.getElementById('inq-client-text').value, false);
   var dateInputs = document.querySelectorAll('#inq-dates-wrap input[type=date]');
   var halfInputs = document.querySelectorAll('#inq-dates-wrap input[type=checkbox][data-half]');
   var pairs = [];
@@ -3055,8 +3324,8 @@ function saveInquiry() {
   var inq = {
     id:         editingInquiryId || String(Date.now()),
     name:       name,
-    clientId:   document.getElementById('inq-client').value || '',
-    clientName: document.getElementById('inq-client-text').value.trim(),
+    clientId:   inqClientRef.id,
+    clientName: inqClientRef.id ? '' : inqClientRef.name,
     dates:      dates,
     dayFractions: dayFractions,
     date:       dates[0],
@@ -3092,8 +3361,7 @@ function editInquiry(id) {
   document.getElementById('inq-name').value        = inq.name;
   document.getElementById('inq-days').value        = dates.length;
   document.getElementById('inq-notes').value       = inq.notes || '';
-  document.getElementById('inq-client').value      = inq.clientId || '';
-  document.getElementById('inq-client-text').value = inq.clientName || '';
+  document.getElementById('inq-client-text').value = clientNameOf(inq) || inq.clientName || '';
   document.getElementById('inq-dates-wrap').innerHTML = '';
   rebuildInquiryDates(false);
   var dateInputs = document.querySelectorAll('#inq-dates-wrap input[type=date]');
@@ -3153,12 +3421,12 @@ function convertInquiryToJob() {
     date:     firstDate,
     dates:    dates.length > 1 ? dates : undefined,
     dayFractions: (dates.length > 1 || !allFull) ? fractions : undefined,
-    type:     'Commercial',
+    type:     JOB_TYPES[0],
     days:     totalDays,
     rate:     settings.dayrate || 0,
-    location: '',
+    location: defaultLocation(),
     notes:    noteLines.join('\n'),
-    status:   'completed',
+    status:   'confirmed',
     gcalEventId: null,
     gcalEventIds: []
   };
@@ -3223,8 +3491,14 @@ function updateTotals() {
   });
 }
 function saveInvoice() {
-  var clientId = document.getElementById('inv-client').value;
-  if (!clientId) { toast('Please select a client', 'error'); return; }
+  var clientRaw = document.getElementById('inv-client').value.trim();
+  if (!clientRaw) { toast('Client is required', 'error'); return; }
+  var project = document.getElementById('inv-project').value.trim();
+  if (!project) { toast('Project is required — pick a job or type a reference', 'error'); return; }
+  if (!lineItems.length || !lineItems.some(function(li) { return (li.desc || '').trim() && (li.qty || 0) * (li.rate || 0) > 0; })) {
+    toast('Add at least one line item', 'error'); return;
+  }
+  var clientId = resolveClientRef(clientRaw, true).id;
   var sub     = lineItems.reduce(function(s, li) { return s + (li.qty || 0) * (li.rate || 0); }, 0);
   var taxRate = +(settings.taxrate || 0);
   var tax     = sub * taxRate / 100;
@@ -3232,7 +3506,7 @@ function saveInvoice() {
     id:        String(Date.now()),
     number:    document.getElementById('inv-number').value,
     clientId:  clientId,
-    project:   document.getElementById('inv-project').value,
+    project:   project,
     date:      document.getElementById('inv-date').value,
     due:       document.getElementById('inv-due').value,
     status:    document.getElementById('inv-status').value,
@@ -3244,27 +3518,25 @@ function saveInvoice() {
     taxRate:   taxRate,
     currency:  settings.currency,
     createdAt: new Date().toISOString(),
-    jobId:     window._invoiceJobId || null
+    jobId:     (document.getElementById('inv-job') || {}).value || window._invoiceJobId || null
   };
   invoices.push(inv);
   window._invoiceJobId = null;
-  save(); closeModal('invoice'); refreshActive();
+  save(); closeModal('invoice'); populateClientDropdowns(); refreshActive();
   toast('Invoice saved!');
+  uploadInvoiceToDrive(inv);
 }
 function deleteInvoice(id) {
   if (!confirm('Delete this invoice?')) return;
   invoices = invoices.filter(function(x) { return x.id !== id; });
   save(); refreshActive(); toast('Invoice deleted.');
 }
-function viewInvoice(id) {
-  var inv = invoices.find(function(x) { return x.id === id; });
-  if (!inv) return;
+function invoiceHtmlFor(inv) {
   var cl  = clients.find(function(c) { return c.id === inv.clientId; });
   var cur = inv.currency || settings.currency;
   var biz = settings.biz || settings.name || 'Your Name';
   var addrFormatted = (settings.address || '').replace(/\n/g, '<br>');
-  document.getElementById('invoice-preview-content').innerHTML =
-    '<div class="invoice-preview">' +
+  return '<div class="invoice-preview">' +
       '<div class="inv-header">' +
         '<div>' +
           '<div class="inv-logo">' + biz + '</div>' +
@@ -3303,6 +3575,13 @@ function viewInvoice(id) {
       '</div>' +
       (inv.notes ? '<div class="inv-footer">' + inv.notes + '</div>' : '') +
     '</div>';
+}
+function viewInvoice(id) {
+  var inv = invoices.find(function(x) { return x.id === id; });
+  if (!inv) return;
+  window._viewingInvoiceId = id;
+  document.getElementById('invoice-preview-content').innerHTML = invoiceHtmlFor(inv);
+  updateInvoiceDriveBtn(inv);
   document.getElementById('modal-view-invoice').classList.add('open');
 }
 function printInvoice() {
@@ -3509,17 +3788,6 @@ function renderAnalytics() {
 
 
 // ── HELPERS ──────────────────────────────────────────────────────────
-function populateClientDropdowns() {
-  ['log-client','inv-client'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var cur = el.value;
-    el.innerHTML = '<option value="">— Select client —</option>' +
-      clients.map(function(c) {
-        return '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + c.name + '</option>';
-      }).join('');
-  });
-}
 
 // ── INIT ─────────────────────────────────────────────────────────────
 document.querySelectorAll('.set-currency-display').forEach(function(el) { el.textContent = settings.currency; });
@@ -3532,8 +3800,8 @@ if (!clients.length && !logs.length && !invoices.length) {
     contacts:[{name:'Priya Sharma', role:'Producer'}, {name:'Devika Nair', role:'Executive producer'}] });
   clients.push({ id:'c2', name:'Red Chillies Entertainment', contact:'Rohan Mehta', email:'rohan@redchillies.com', phone:'+91 99870 45678', address:'Mumbai, Maharashtra', industry:'Production House', gst:'', createdAt: new Date().toISOString(),
     contacts:[{name:'Rohan Mehta', role:'Line producer'}] });
-  logs.push({ id:'l1', name:'Nike TVC - Hero Shoot', clientId:'c1', date: yr+'-02-14', type:'Commercial', days:3, rate:25000, location:'Mumbai', notes:'Alexa Mini LF. 2 camera setup.', status:'completed' });
-  logs.push({ id:'l2', name:'Corporate Brand Film',  clientId:'c2', date: yr+'-03-20', type:'Corporate',  days:2, rate:22000, location:'Delhi',  notes:'', status:'completed' });
+  logs.push({ id:'l1', name:'Nike TVC - Hero Shoot', clientId:'c1', date: yr+'-02-14', type:'Ad', days:3, rate:25000, location:'Mumbai', notes:'Alexa Mini LF. 2 camera setup.', status:'completed' });
+  logs.push({ id:'l2', name:'Corporate Brand Film',  clientId:'c2', date: yr+'-03-20', type:'Promo',  days:2, rate:22000, location:'Delhi',  notes:'', status:'completed' });
   logs.push({ id:'l3', name:'Music Video - Indie Band', clientId:'c1', date: yr+'-04-05', type:'Music Video', days:1.5, rate:20000, location:'Bangalore', notes:'Night shoot. BMPCC 6K.', status:'completed' });
   var soon = new Date(Date.now() + 9 * 86400000).toISOString().slice(0,10);
   inquiries.push({ id:'q1', name:'Puma campaign pitch', clientId:'', clientName:'Puma India', date: soon, days:2,
