@@ -104,6 +104,8 @@
   .nav-count { font-family: var(--font-mono); font-size: 11px; opacity: .75; }
   .sidebar-foot { padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
   .status-line { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text3); }
+  .status-btn { border: none; background: transparent; font-family: inherit; cursor: pointer; text-align: left; padding: 0; width: 100%; }
+  .status-btn:hover { color: var(--text2); }
   .status-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex: none; }
 
   .main { margin-left: var(--rail-w); flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -511,9 +513,9 @@
       </button>
     </nav>
     <div class="sidebar-foot">
-      <div class="status-line" id="sync-status">
+      <button class="status-line status-btn" id="sync-status" onclick="statusLineClick()">
         <span class="dot" id="sync-dot"></span><span id="sync-label">Not connected</span>
-      </div>
+      </button>
       <div class="status-line">
         <span class="dot" id="gcal-dot"></span><span id="gcal-label">Calendar sync off</span>
       </div>
@@ -661,8 +663,10 @@
         <h2>Excel is the source of truth</h2>
         <p style="font-size:13px;color:var(--text2);line-height:1.6;">
           Every save writes <span class="mono" style="color:var(--accent);">CineWork-Data.xlsx</span> to your Google Drive;
-          every open reads it back. Each invoice you save is also filed as its own document in a
-          <span class="mono" style="color:var(--accent);">CineWork Invoices</span> folder. Google Calendar stays two-way &mdash; confirmed jobs as busy events, inquiries as tentative.
+          every open reads it back. Everything lives in one
+          <span class="mono" style="color:var(--accent);">CineWork</span> folder — the spreadsheet at the top,
+          and every invoice you save filed as its own document inside
+          <span class="mono" style="color:var(--accent);">CineWork/Invoices</span>. Google Calendar stays two-way &mdash; confirmed jobs as busy events, inquiries as tentative.
         </p>
         <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
           <div class="status-pill" id="pill-drive"><span class="dot"></span><span>Drive not connected</span></div>
@@ -1666,6 +1670,9 @@ function updateSyncStatus(txt) {
   var text = txt || 'Not connected';
   if (!txt) {
     if (driveState.syncing) { text = 'Syncing…'; color = 'var(--accent)'; }
+    else if (driveState.needsAuth) { text = 'Tap to reconnect'; color = 'var(--accent2)'; }
+    else if (hasPendingChanges() && driveState.connected) { text = 'Changes queued…'; color = 'var(--accent)'; }
+    else if (hasPendingChanges()) { text = 'Saved here — will sync'; color = 'var(--accent2)'; }
     else if (driveState.connected) {
       text = driveState.lastSync ? 'Drive synced ' + new Date(driveState.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Drive connected';
       color = 'var(--green)';
@@ -1674,12 +1681,15 @@ function updateSyncStatus(txt) {
     else text = 'Drive not connected';
   } else {
     if (/error|fail/i.test(txt)) color = 'var(--red)';
-    else if (/sync|load/i.test(txt)) color = 'var(--accent)';
+    else if (/sync|load|filing/i.test(txt)) color = 'var(--accent)';
     else if (/connect|synced/i.test(txt)) color = 'var(--green)';
   }
   if (dot) dot.style.background = color;
   if (label) label.textContent = text;
-  if (box) { box.textContent = text; box.style.color = color; }
+  if (box) {
+    box.textContent = text + (settings.driveAccount ? ' · ' + settings.driveAccount : '');
+    box.style.color = color;
+  }
 
   var gDot = document.getElementById('gcal-dot');
   var gLabel = document.getElementById('gcal-label');
@@ -1687,6 +1697,10 @@ function updateSyncStatus(txt) {
   if (gDot) gDot.style.background = gcalOn ? 'var(--blue)' : 'var(--text3)';
   if (gLabel) gLabel.textContent = gcalOn ? 'GCal two-way on' : 'Calendar sync off';
   updateStatusPills(text, color);
+}
+function statusLineClick() {
+  if (driveState.needsAuth || !driveState.connected) { connectDrive(); return; }
+  syncToDrive(true);
 }
 function updateStatusPills(text, color) {
   var drive = document.getElementById('pill-drive');
@@ -2153,24 +2167,82 @@ function openJobPicker() {
 }
 
 // ── INVOICES FILED TO GOOGLE DRIVE ───────────────────────────────────
-var INVOICE_FOLDER_NAME = 'CineWork Invoices';
-function ensureInvoiceFolder(token) {
-  if (settings.invoiceFolderId) return Promise.resolve(settings.invoiceFolderId);
-  var q = encodeURIComponent("name='" + INVOICE_FOLDER_NAME + "' and mimeType='application/vnd.google-apps.folder' and trashed=false");
-  return fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)', {
+var APP_FOLDER_NAME = 'CineWork';
+var INVOICE_FOLDER_NAME = 'Invoices';
+
+// Drive layout:  CineWork/CineWork-Data.xlsx  and  CineWork/Invoices/<each invoice>
+function findOrCreateFolder(token, name, parentId) {
+  var q = "name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+  if (parentId) q += " and '" + parentId + "' in parents";
+  return fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', {
     headers: { Authorization: 'Bearer ' + token }
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(r) { return r.ok ? r.json() : { files: [] }; }).then(function(d) {
     if (d.files && d.files.length) return d.files[0].id;
-    return fetch('https://www.googleapis.com/drive/v3/files', {
+    var meta = { name: name, mimeType: 'application/vnd.google-apps.folder' };
+    if (parentId) meta.parents = [parentId];
+    return fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: INVOICE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+      body: JSON.stringify(meta)
     }).then(function(r) { return r.json(); }).then(function(f) { return f.id; });
+  });
+}
+function ensureAppFolder(token) {
+  if (settings.appFolderId) return Promise.resolve(settings.appFolderId);
+  return findOrCreateFolder(token, APP_FOLDER_NAME, null).then(function(id) {
+    settings.appFolderId = id;
+    DB.set('settings', settings);
+    return id;
+  });
+}
+function ensureInvoiceFolder(token) {
+  if (settings.invoiceFolderId) return Promise.resolve(settings.invoiceFolderId);
+  return ensureAppFolder(token).then(function(appId) {
+    return findOrCreateFolder(token, INVOICE_FOLDER_NAME, appId);
   }).then(function(id) {
     settings.invoiceFolderId = id;
     DB.set('settings', settings);
     return id;
   });
+}
+function moveFileTo(token, fileId, parentId) {
+  return fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?fields=parents', {
+    headers: { Authorization: 'Bearer ' + token }
+  }).then(function(r) { return r.ok ? r.json() : null; }).then(function(f) {
+    if (!f) return;
+    var parents = f.parents || [];
+    if (parents.indexOf(parentId) !== -1) return;      // already in place
+    var url = 'https://www.googleapis.com/drive/v3/files/' + fileId +
+      '?addParents=' + parentId + (parents.length ? '&removeParents=' + parents.join(',') : '') + '&fields=id';
+    return fetch(url, { method: 'PATCH', headers: { Authorization: 'Bearer ' + token } });
+  }).catch(function() {});
+}
+// Earlier builds put the sheet in My Drive and the invoices in a root-level
+// "CineWork Invoices" folder. Tidy both into CineWork/ without losing anything.
+function migrateDriveLayout(token) {
+  if (settings.driveLayoutV2) return Promise.resolve();
+  return ensureAppFolder(token).then(function(appId) {
+    var jobs = [];
+    if (settings.driveFileId) jobs.push(moveFileTo(token, settings.driveFileId, appId));
+    jobs.push(
+      findOrCreateFolder(token, 'CineWork Invoices', null).then(function(oldId) {
+        // fold the old folder in and rename it, so existing invoices come along
+        return fetch('https://www.googleapis.com/drive/v3/files/' + oldId + '?fields=id,name', {
+          method: 'PATCH',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: INVOICE_FOLDER_NAME })
+        }).then(function() { return moveFileTo(token, oldId, appId); })
+          .then(function() {
+            settings.invoiceFolderId = oldId;
+            DB.set('settings', settings);
+          });
+      }).catch(function() {})
+    );
+    return Promise.all(jobs);
+  }).then(function() {
+    settings.driveLayoutV2 = true;
+    DB.set('settings', settings);
+  }).catch(function() {});
 }
 function invoiceDocName(inv) {
   var cl = clients.find(function(c) { return c.id === inv.clientId; });
@@ -2208,7 +2280,7 @@ function uploadInvoiceToDrive(inv, loud) {
     inv.driveLink = f.webViewLink || ('https://drive.google.com/open?id=' + f.id);
     DB.set('invoices', invoices);
     updateSyncStatus();
-    if (loud !== false) toast('Filed to Drive → ' + INVOICE_FOLDER_NAME);
+    if (loud !== false) toast('Filed to Drive → ' + APP_FOLDER_NAME + '/' + INVOICE_FOLDER_NAME);
     var cur = invoices.find(function(x) { return x.id === window._viewingInvoiceId; });
     if (cur) updateInvoiceDriveBtn(cur);
   }).catch(function(e) {
@@ -2229,13 +2301,363 @@ function saveViewedInvoiceToDrive() {
   uploadInvoiceToDrive(inv, true);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// SYNC ENGINE — offline-safe, merge-based, multi-device
+//
+// The rules this enforces:
+//   1. A change made on any device is never lost, even if Drive is
+//      unreachable when you make it. It queues and goes up later.
+//   2. Loading from Drive MERGES with what's on this device instead of
+//      replacing it, so two devices can both write without clobbering.
+//   3. Deletions are recorded as tombstones, so a merge can't resurrect
+//      something you deleted on another device.
+//   4. Signing in on a second device does not sign the first one out.
+// ═══════════════════════════════════════════════════════════════════════
+
+var DEVICE_ID = (function() {
+  var id = null;
+  try { id = localStorage.getItem('cw_device'); } catch (e) {}
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).slice(2, 10);
+    try { localStorage.setItem('cw_device', id); } catch (e) {}
+  }
+  return id;
+})();
+
+var SYNC_COLLECTIONS = ['clients', 'logs', 'inquiries', 'invoices'];
+var tombstones = DB.get('tombstones') || [];
+var changeSnapshot = DB.get('snapshot') || null;
+
+function collectionByName(name) {
+  if (name === 'clients') return clients;
+  if (name === 'logs') return logs;
+  if (name === 'inquiries') return inquiries;
+  if (name === 'invoices') return invoices;
+  return [];
+}
+function setCollection(name, arr) {
+  if (name === 'clients') clients = arr;
+  else if (name === 'logs') logs = arr;
+  else if (name === 'inquiries') inquiries = arr;
+  else if (name === 'invoices') invoices = arr;
+}
+function recordFingerprint(rec) {
+  var copy = {};
+  Object.keys(rec).sort().forEach(function(k) {
+    if (k === 'updatedAt' || k === 'updatedBy') return;
+    copy[k] = rec[k];
+  });
+  return JSON.stringify(copy);
+}
+function buildSnapshot() {
+  var snap = {};
+  SYNC_COLLECTIONS.forEach(function(name) {
+    snap[name] = {};
+    collectionByName(name).forEach(function(r) {
+      if (r && r.id) snap[name][r.id] = recordFingerprint(r);
+    });
+  });
+  return snap;
+}
+function commitSnapshot() {
+  changeSnapshot = buildSnapshot();
+  DB.set('snapshot', changeSnapshot);
+}
+// Stamps whatever actually changed and tombstones whatever vanished —
+// so every delete path is covered without touching each delete function.
+function trackChanges() {
+  var now = new Date().toISOString();
+  if (!changeSnapshot) { commitSnapshot(); return; }
+  SYNC_COLLECTIONS.forEach(function(name) {
+    var prev = changeSnapshot[name] || {};
+    var seen = {};
+    collectionByName(name).forEach(function(r) {
+      if (!r || !r.id) return;
+      seen[r.id] = true;
+      var fp = recordFingerprint(r);
+      if (prev[r.id] !== fp) {
+        r.updatedAt = now;
+        r.updatedBy = DEVICE_ID;
+        untombstone(name, r.id);
+      }
+    });
+    Object.keys(prev).forEach(function(id) {
+      if (!seen[id]) addTombstone(name, id, now);
+    });
+  });
+  commitSnapshot();
+}
+function addTombstone(type, id, at) {
+  var existing = tombstones.find(function(t) { return t.type === type && t.id === id; });
+  if (existing) { existing.at = at; return; }
+  tombstones.push({ type: type, id: id, at: at, by: DEVICE_ID });
+  if (tombstones.length > 800) tombstones = tombstones.slice(-800);
+}
+function untombstone(type, id) {
+  tombstones = tombstones.filter(function(t) { return !(t.type === type && t.id === id); });
+}
+function tombstoneFor(type, id) {
+  return tombstones.find(function(t) { return t.type === type && t.id === id; }) || null;
+}
+
+// ── MERGE ────────────────────────────────────────────────────────────
+function mergeCollection(name, remoteRows) {
+  var byId = {};
+  collectionByName(name).forEach(function(r) { if (r && r.id) byId[r.id] = r; });
+  (remoteRows || []).forEach(function(r) {
+    if (!r || !r.id) return;
+    var mine = byId[r.id];
+    if (!mine) { byId[r.id] = r; return; }
+    var a = mine.updatedAt || '', b = r.updatedAt || '';
+    // No stamps on either side means legacy data — keep the local copy.
+    if (b && b > a) byId[r.id] = r;
+  });
+  var out = [];
+  Object.keys(byId).forEach(function(id) {
+    var rec = byId[id];
+    var t = tombstoneFor(name, id);
+    if (t && (!rec.updatedAt || t.at >= rec.updatedAt)) return; // deleted after its last edit
+    out.push(rec);
+  });
+  setCollection(name, out);
+}
+function mergeRemoteData(data) {
+  (data.tombstones || []).forEach(function(t) {
+    if (!t.type || !t.id) return;
+    var mine = tombstoneFor(t.type, t.id);
+    if (!mine || t.at > mine.at) addTombstone(t.type, t.id, t.at);
+  });
+  SYNC_COLLECTIONS.forEach(function(name) { mergeCollection(name, data[name]); });
+  Object.keys(data.settings || {}).forEach(function(k) {
+    // device-local keys never come from the shared file
+    if (['driveClientId', 'driveConnected', 'driveFileId', 'invoiceFolderId',
+         'pendingSince', 'lastRemoteModified', 'lastSync', 'gcalSyncToken'].indexOf(k) !== -1) return;
+    settings[k] = data.settings[k];
+  });
+  DB.set('tombstones', tombstones);
+  SYNC_COLLECTIONS.forEach(function(name) { DB.set(name, collectionByName(name)); });
+  DB.set('settings', settings);
+  commitSnapshot();
+}
+
+// ── PENDING QUEUE ────────────────────────────────────────────────────
+function markPendingSync() {
+  if (!settings.pendingSince) {
+    settings.pendingSince = new Date().toISOString();
+    DB.set('settings', settings);
+  }
+  updateSyncStatus();
+}
+function clearPendingSync() {
+  if (settings.pendingSince) {
+    delete settings.pendingSince;
+    DB.set('settings', settings);
+  }
+}
+function hasPendingChanges() { return !!settings.pendingSince; }
+
+function scheduleSyncToDrive() {
+  if (driveState.loadingFromDrive) return;
+  if (settings.autosync === false) return;
+  if (!driveState.connected || driveState.needsAuth) { markPendingSync(); return; }
+  markPendingSync();
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(function() { syncToDrive(false); }, 2000);
+}
+// Called on focus, on regaining network, and after a silent re-auth.
+function flushPendingSync() {
+  if (!settings.driveConnected || settings.autosync === false) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  if (driveState.connected && !driveState.needsAuth) {
+    if (hasPendingChanges()) syncToDrive(false);
+    else checkRemoteForUpdates();
+    return;
+  }
+  silentReauth().then(function(ok) {
+    if (ok) syncToDrive(false);
+  });
+}
+
+// ── TOKEN THAT SURVIVES CLOSING THE APP ──────────────────────────────
+function storeToken(token, expiresIn) {
+  driveState.accessToken = token;
+  driveState.tokenExpiry = Date.now() + ((expiresIn || 3600) - 120) * 1000;
+  driveState.connected = true;
+  driveState.needsAuth = false;
+  try {
+    localStorage.setItem('cw_token', JSON.stringify({ t: token, e: driveState.tokenExpiry }));
+  } catch (e) {}
+}
+function restoreToken() {
+  try {
+    var raw = JSON.parse(localStorage.getItem('cw_token') || 'null');
+    if (raw && raw.t && Date.now() < raw.e) {
+      driveState.accessToken = raw.t;
+      driveState.tokenExpiry = raw.e;
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+function clearStoredToken() {
+  try { localStorage.removeItem('cw_token'); } catch (e) {}
+}
+// Silent refresh. Failure means "ask again later", never "throw the data away".
+function silentReauth() {
+  return new Promise(function(resolve) {
+    if (!settings.driveClientId || !settings.driveConnected) return resolve(false);
+    if (driveState.accessToken && Date.now() < driveState.tokenExpiry) {
+      driveState.connected = true; driveState.needsAuth = false;
+      return resolve(true);
+    }
+    if (!tokenClient) initDriveClient();
+    if (!tokenClient) return resolve(false);
+    var done = false;
+    var origCb = tokenClient.callback;
+    tokenClient.callback = function(resp) {
+      tokenClient.callback = origCb;
+      if (done) return;
+      done = true;
+      if (resp && resp.access_token) {
+        storeToken(resp.access_token, resp.expires_in);
+        updateSyncStatus();
+        resolve(true);
+      } else {
+        driveState.needsAuth = true;
+        updateSyncStatus();
+        resolve(false);
+      }
+    };
+    try {
+      var req = { prompt: '' };
+      if (settings.driveAccount) req.hint = settings.driveAccount;
+      tokenClient.requestAccessToken(req);
+    } catch (e) {
+      driveState.needsAuth = true;
+      updateSyncStatus();
+      resolve(false);
+    }
+    setTimeout(function() {
+      if (!done) { done = true; driveState.needsAuth = true; updateSyncStatus(); resolve(false); }
+    }, 8000);
+  });
+}
+function rememberDriveAccount(token) {
+  return fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {
+    headers: { Authorization: 'Bearer ' + token }
+  }).then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
+    if (d && d.user && d.user.emailAddress) {
+      settings.driveAccount = d.user.emailAddress;
+      DB.set('settings', settings);
+      updateSyncStatus();
+    }
+  }).catch(function() {});
+}
+
+// ── PUSH / PULL ──────────────────────────────────────────────────────
+function remoteModifiedTime() {
+  if (!driveState.fileId) return Promise.resolve(null);
+  return ensureToken().then(function(token) {
+    return fetch('https://www.googleapis.com/drive/v3/files/' + driveState.fileId + '?fields=modifiedTime', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+  }).then(function(r) {
+    if (r.status === 404) { driveState.fileId = null; settings.driveFileId = null; return null; }
+    if (!r.ok) return null;
+    return r.json();
+  }).then(function(d) { return d ? d.modifiedTime : null; }).catch(function() { return null; });
+}
+// Someone else wrote the file since we last touched it.
+function remoteIsNewer() {
+  return remoteModifiedTime().then(function(mt) {
+    if (!mt) return false;
+    return !settings.lastRemoteModified || mt > settings.lastRemoteModified;
+  });
+}
+function checkRemoteForUpdates() {
+  if (!driveState.connected || driveState.syncing) return Promise.resolve();
+  return remoteIsNewer().then(function(newer) {
+    if (newer) return loadFromDrive(false);
+  });
+}
+// Pull-then-push. This is what every sync path goes through.
+function syncToDrive(showToast) {
+  if (!driveState.connected || driveState.needsAuth) {
+    markPendingSync();
+    if (showToast) toast('Not connected — changes are queued', 'error');
+    return silentReauth().then(function(ok) { return ok ? syncToDrive(showToast) : undefined; });
+  }
+  if (driveState.syncing) { driveState.syncQueued = true; return Promise.resolve(); }
+  return remoteIsNewer().then(function(newer) {
+    if (newer) return loadFromDrive(false);
+  }).then(function() {
+    return pushToDrive(showToast);
+  }).then(function() {
+    if (driveState.syncQueued) { driveState.syncQueued = false; return syncToDrive(false); }
+  });
+}
+
+// ── KEEPING THE HOUR-LONG TOKEN ALIVE ────────────────────────────────
+// Google access tokens expire after about an hour. Rather than waiting to hit
+// the wall mid-save, renew a few minutes early, quietly, while the app is open.
+var TOKEN_WATCH_MS = 60000;
+setInterval(function() {
+  if (!settings.driveClientId || !settings.driveConnected) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  var msLeft = (driveState.tokenExpiry || 0) - Date.now();
+  if (driveState.accessToken && msLeft > 5 * 60 * 1000) return;
+  silentReauth().then(function(ok) {
+    if (ok && hasPendingChanges()) syncToDrive(false);
+  });
+}, TOKEN_WATCH_MS);
+
+// ── ONE-TIME REMOVAL OF THE OLD DEMO RECORDS ─────────────────────────
+var SAMPLE_IDS = {
+  clients: { c1: 'Ogilvy India', c2: 'Red Chillies Entertainment' },
+  logs: { l1: 'Nike TVC - Hero Shoot', l2: 'Corporate Brand Film', l3: 'Music Video - Indie Band' },
+  inquiries: { q1: 'Puma campaign pitch' },
+  invoices: { i1: 'INV-0001', i2: 'INV-0002' }
+};
+function purgeSampleData() {
+  if (settings.samplePurged) return;
+  var removed = 0;
+  var now = new Date().toISOString();
+  ['clients', 'logs', 'inquiries', 'invoices'].forEach(function(type) {
+    var map = SAMPLE_IDS[type];
+    var kept = collectionByName(type).filter(function(r) {
+      var expected = map[r.id];
+      if (!expected) return true;
+      // only drop it if it still looks like the untouched sample row
+      var label = type === 'invoices' ? r.number : r.name;
+      if (label !== expected) return true;
+      // tombstone it explicitly: the demo rows may already be in the Drive file,
+      // and without this a merge would just bring them back
+      addTombstone(type, r.id, now);
+      removed++;
+      return false;
+    });
+    setCollection(type, kept);
+  });
+  settings.samplePurged = true;
+  if (removed) {
+    save();     // records tombstones, so the demo rows clear on every device
+    populateClientDropdowns();
+    toast(removed + ' sample record' + (removed !== 1 ? 's' : '') + ' removed');
+  } else {
+    DB.set('settings', settings);
+  }
+}
+
 
 const save = () => {
+  trackChanges();
   DB.set('settings', settings);
   DB.set('clients',  clients);
   DB.set('logs',     logs);
   DB.set('inquiries', inquiries);
   DB.set('invoices', invoices);
+  DB.set('tombstones', tombstones);
   scheduleSyncToDrive();
 };
 
@@ -2267,11 +2689,10 @@ function initDriveClient() {
       scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events',
       callback: function(resp) {
         if (resp.access_token) {
-          driveState.accessToken = resp.access_token;
-          driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
-          driveState.connected = true;
+          storeToken(resp.access_token, resp.expires_in);
           settings.driveConnected = true;
           save();
+          rememberDriveAccount(resp.access_token);
           onDriveConnected();
         } else {
           updateSyncStatus('Auth failed');
@@ -2291,11 +2712,15 @@ function connectDrive() {
   }
   if (!tokenClient) initDriveClient();
   if (!tokenClient) { toast('Google API loading... try again in a moment.', 'error'); return; }
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  var req = { prompt: 'consent' };
+  if (settings.driveAccount) req.hint = settings.driveAccount;
+  tokenClient.requestAccessToken(req);
 }
 
 function disconnectDrive() {
-  if (!confirm('Disconnect Google Drive? Your local data stays, but auto-sync stops.')) return;
+  if (!confirm('Disconnect Google Drive on this device? Your local data stays, and other devices stay connected.')) return;
+  clearStoredToken();
+  driveState.needsAuth = false;
   driveState.accessToken = null;
   driveState.connected = false;
   settings.driveConnected = false;
@@ -2314,11 +2739,13 @@ function ensureToken() {
     tokenClient.callback = function(resp) {
       tokenClient.callback = origCb;
       if (resp.access_token) {
-        driveState.accessToken = resp.access_token;
-        driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
-        driveState.connected = true;
+        storeToken(resp.access_token, resp.expires_in);
         resolve(resp.access_token);
-      } else reject(new Error('No token'));
+      } else {
+        driveState.needsAuth = true;
+        updateSyncStatus();
+        reject(new Error('No token'));
+      }
     };
     tokenClient.requestAccessToken({ prompt: '' });
   });
@@ -2327,9 +2754,12 @@ function ensureToken() {
 function onDriveConnected() {
   updateSyncStatus('Finding data file...');
   ensureToken().then(function(token) {
+    return migrateDriveLayout(token).then(function() { return token; });
+  }).then(function(token) {
     if (settings.driveFileId) {
       driveState.fileId = settings.driveFileId;
-      return loadFromDrive(false);
+      // merge first, then push — anything typed offline survives
+      return loadFromDrive(false).then(function() { return pushToDrive(false); });
     }
     var q = encodeURIComponent("name='" + DATA_FILENAME + "' and trashed=false");
     return fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name,modifiedTime)&spaces=drive', {
@@ -2339,10 +2769,10 @@ function onDriveConnected() {
         driveState.fileId = data.files[0].id;
         settings.driveFileId = driveState.fileId;
         save();
-        return loadFromDrive(false);
+        return loadFromDrive(false).then(function() { return pushToDrive(false); });
       } else {
         updateSyncStatus('Creating file...');
-        return syncToDrive(false);
+        return pushToDrive(false);
       }
     });
   }).then(function() {
@@ -2378,15 +2808,16 @@ function dataToWorkbook() {
     return copy;
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invForSheet.length ? invForSheet : [{id:'',number:'',clientId:'',project:'',date:'',due:'',status:'',subtotal:'',tax:'',total:'',taxRate:'',currency:'',notes:'',createdAt:'',lineItemsJson:''}]), 'Invoices');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tombstones.length ? tombstones : [{type:'',id:'',at:'',by:''}]), 'Deleted');
   var settingsArr = Object.keys(settings).filter(function(k) {
-    return ['driveConnected','driveFileId'].indexOf(k) === -1;
+    return ['driveConnected','driveFileId','driveAccount','invoiceFolderId','pendingSince','lastRemoteModified','gcalSyncToken'].indexOf(k) === -1;
   }).map(function(k) { return { key: k, value: typeof settings[k] === 'string' ? settings[k] : JSON.stringify(settings[k]) }; });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(settingsArr), 'Settings');
   return wb;
 }
 
 function workbookToData(wb) {
-  var out = { clients:[], logs:[], inquiries:[], invoices:[], settings:{} };
+  var out = { clients:[], logs:[], inquiries:[], invoices:[], settings:{}, tombstones:[] };
   if (wb.Sheets['Clients']) {
     out.clients = XLSX.utils.sheet_to_json(wb.Sheets['Clients']).filter(function(r) { return r.id; }).map(function(c) {
       if (c.contactsJson) {
@@ -2419,6 +2850,9 @@ function workbookToData(wb) {
       return inv;
     });
   }
+  if (wb.Sheets['Deleted']) {
+    out.tombstones = XLSX.utils.sheet_to_json(wb.Sheets['Deleted']).filter(function(r) { return r.id && r.type; });
+  }
   if (wb.Sheets['Settings']) {
     XLSX.utils.sheet_to_json(wb.Sheets['Settings']).forEach(function(row) {
       if (!row.key) return;
@@ -2430,38 +2864,51 @@ function workbookToData(wb) {
   return out;
 }
 
-function syncToDrive(showToast) {
-  if (!driveState.connected) { if (showToast) toast('Connect Drive first', 'error'); return Promise.resolve(); }
+function pushToDrive(showToast) {
+  if (!driveState.connected) { markPendingSync(); if (showToast) toast('Connect Drive first', 'error'); return Promise.resolve(); }
   if (driveState.syncing) return Promise.resolve();
   driveState.syncing = true;
   updateSyncStatus('Syncing...');
   return ensureToken().then(function(token) {
-    var wb = dataToWorkbook();
-    var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    var blob = new Blob([wbout], { type: XLSX_MIME });
-    var meta = { name: DATA_FILENAME, mimeType: XLSX_MIME };
-    var form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-    form.append('file', blob);
-    var url, method;
-    if (driveState.fileId) {
-      url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveState.fileId + '?uploadType=multipart';
-      method = 'PATCH';
-    } else {
-      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      method = 'POST';
-    }
-    return fetch(url, { method: method, headers: { Authorization: 'Bearer ' + token }, body: form });
+    return ensureAppFolder(token).then(function(folderId) {
+      var wb = dataToWorkbook();
+      var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      var blob = new Blob([wbout], { type: XLSX_MIME });
+      var meta = { name: DATA_FILENAME, mimeType: XLSX_MIME };
+      if (!driveState.fileId && folderId) meta.parents = [folderId];
+      var form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+      form.append('file', blob);
+      var url, method;
+      if (driveState.fileId) {
+        url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveState.fileId + '?uploadType=multipart&fields=id,modifiedTime';
+        method = 'PATCH';
+      } else {
+        url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime';
+        method = 'POST';
+      }
+      return fetch(url, { method: method, headers: { Authorization: 'Bearer ' + token }, body: form });
+    });
   }).then(function(r) {
+    if (r.status === 404 && driveState.fileId) {
+      driveState.fileId = null;
+      settings.driveFileId = null;
+      driveState.syncing = false;
+      return pushToDrive(showToast);       // retry as a fresh file
+    }
     if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
     return r.json();
   }).then(function(result) {
+    if (!result) return;
     if (result.id) {
       driveState.fileId = result.id;
       settings.driveFileId = result.id;
     }
+    if (result.modifiedTime) settings.lastRemoteModified = result.modifiedTime;
     driveState.lastSync = new Date().toISOString();
     settings.lastSync = driveState.lastSync;
+    clearPendingSync();
+    commitSnapshot();
     DB.set('settings', settings); // save without re-triggering scheduleSync
     driveState.syncing = false;
     updateSyncStatus();
@@ -2469,8 +2916,10 @@ function syncToDrive(showToast) {
   }).catch(function(e) {
     driveState.syncing = false;
     console.error(e);
-    updateSyncStatus('Sync error');
-    if (showToast) toast('Sync failed: ' + e.message, 'error');
+    if (/401|403/.test(e.message || '')) { driveState.needsAuth = true; clearStoredToken(); }
+    markPendingSync();          // nothing is lost — it goes up on the next try
+    updateSyncStatus();
+    if (showToast) toast('Sync failed: ' + e.message + ' — changes are queued', 'error');
   });
 }
 
@@ -2488,28 +2937,13 @@ function loadFromDrive(showToast) {
   }).then(function(buf) {
     var wb = XLSX.read(buf, { type: 'array' });
     var data = workbookToData(wb);
-    if (data.clients.length || data.logs.length || data.invoices.length || data.inquiries.length) {
-      clients = data.clients;
-      logs = data.logs;
-      inquiries = data.inquiries;
-      invoices = data.invoices;
-    }
-    Object.keys(data.settings).forEach(function(k) {
-      if (['driveClientId','driveConnected','driveFileId'].indexOf(k) === -1) {
-        settings[k] = data.settings[k];
-      }
-    });
-    DB.set('clients', clients);
-    DB.set('logs', logs);
-    DB.set('inquiries', inquiries);
-    DB.set('invoices', invoices);
-    DB.set('settings', settings);
+    mergeRemoteData(data);
     driveState.loadingFromDrive = false;
     document.querySelectorAll('.set-currency-display').forEach(function(el) { el.textContent = settings.currency; });
     populateClientDropdowns();
-    if (document.getElementById('page-dashboard').classList.contains('active')) { renderDashboard(); renderCalendar(); }
+    refreshActive();
     updateSyncStatus();
-    if (showToast) toast('Loaded from Drive!');
+    if (showToast) toast('Merged with Drive!');
   }).catch(function(e) {
     driveState.loadingFromDrive = false;
     console.error(e);
@@ -2518,11 +2952,6 @@ function loadFromDrive(showToast) {
   });
 }
 
-function scheduleSyncToDrive() {
-  if (!driveState.connected || settings.autosync === false || driveState.loadingFromDrive) return;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(function() { syncToDrive(false); }, 2000);
-}
 
 // ── GOOGLE CALENDAR SYNC ─────────────────────────────────────────────
 var GCAL_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
@@ -3793,80 +4222,73 @@ function renderAnalytics() {
 document.querySelectorAll('.set-currency-display').forEach(function(el) { el.textContent = settings.currency; });
 populateClientDropdowns();
 
-// Sample data for first-time users
-if (!clients.length && !logs.length && !invoices.length) {
-  var yr = new Date().getFullYear();
-  clients.push({ id:'c1', name:'Ogilvy India', contact:'Priya Sharma', email:'priya@ogilvy.in', phone:'+91 98200 11234', address:'Mumbai, Maharashtra', industry:'Advertising', gst:'', createdAt: new Date().toISOString(),
-    contacts:[{name:'Priya Sharma', role:'Producer'}, {name:'Devika Nair', role:'Executive producer'}] });
-  clients.push({ id:'c2', name:'Red Chillies Entertainment', contact:'Rohan Mehta', email:'rohan@redchillies.com', phone:'+91 99870 45678', address:'Mumbai, Maharashtra', industry:'Production House', gst:'', createdAt: new Date().toISOString(),
-    contacts:[{name:'Rohan Mehta', role:'Line producer'}] });
-  logs.push({ id:'l1', name:'Nike TVC - Hero Shoot', clientId:'c1', date: yr+'-02-14', type:'Ad', days:3, rate:25000, location:'Mumbai', notes:'Alexa Mini LF. 2 camera setup.', status:'completed' });
-  logs.push({ id:'l2', name:'Corporate Brand Film',  clientId:'c2', date: yr+'-03-20', type:'Promo',  days:2, rate:22000, location:'Delhi',  notes:'', status:'completed' });
-  logs.push({ id:'l3', name:'Music Video - Indie Band', clientId:'c1', date: yr+'-04-05', type:'Music Video', days:1.5, rate:20000, location:'Bangalore', notes:'Night shoot. BMPCC 6K.', status:'completed' });
-  var soon = new Date(Date.now() + 9 * 86400000).toISOString().slice(0,10);
-  inquiries.push({ id:'q1', name:'Puma campaign pitch', clientId:'', clientName:'Puma India', date: soon, days:2,
-    dates:[soon, new Date(Date.now() + 10 * 86400000).toISOString().slice(0,10)], notes:'Rate discussed, waiting on PO.',
-    status:'inquiry', createdAt: new Date(Date.now() - 7 * 86400000).toISOString() });
-  invoices.push({ id:'i1', number:'INV-0001', clientId:'c1', project:'Nike TVC', date: yr+'-02-18', due: yr+'-03-18', status:'paid', lineItems:[{desc:'Director of Photography - 3 Shoot Days',qty:3,rate:25000},{desc:'Equipment Package',qty:1,rate:15000}], subtotal:90000, tax:16200, total:106200, taxRate:18, currency:'₹', notes:'Thank you for your business!', createdAt: yr+'-02-18T00:00:00.000Z', jobId:'l1', paidAt: yr+'-03-10T00:00:00.000Z' });
-  invoices.push({ id:'i2', number:'INV-0002', clientId:'c2', project:'Brand Film Q1', date: yr+'-03-22', due: yr+'-04-22', status:'unpaid', lineItems:[{desc:'DOP - 2 Days',qty:2,rate:22000},{desc:'Color Grade',qty:1,rate:12000}], subtotal:56000, tax:10080, total:66080, taxRate:18, currency:'₹', notes:'Payment due within 30 days.', createdAt: yr+'-03-22T00:00:00.000Z', jobId:'l2' });
-  save();
-  populateClientDropdowns();
-}
+// One-time cleanup: remove the demo records earlier builds seeded, but only
+// where they are still untouched, so real edits are never thrown away.
+purgeSampleData();
 
 renderDashboard();
 renderCalendar();
 setTopbar('dashboard');
 updateNavCounts();
 
-// Auto-reconnect to Drive if previously connected
+// Auto-reconnect to Drive if previously connected.
+// A stored token means the app is usable the instant it opens — no round trip,
+// no re-consent, and queued changes go up immediately.
 if (settings.driveClientId && settings.driveConnected) {
+  if (restoreToken()) {
+    driveState.connected = true;
+    driveState.needsAuth = false;
+    driveState.fileId = settings.driveFileId || null;
+    updateSyncStatus();
+    setTimeout(function() {
+      syncToDrive(false).then(function() {
+        if (settings.gcalSync !== false) pullFromCalendar(false);
+      });
+    }, 400);
+  } else {
+    driveState.fileId = settings.driveFileId || null;
+    driveState.needsAuth = true;
+    updateSyncStatus();
+  }
   var driveWait = setInterval(function() {
     if (window.google && window.google.accounts && window.google.accounts.oauth2) {
       clearInterval(driveWait);
       initDriveClient();
-      // Silent token request (no popup if user has active Google session)
       setTimeout(function() {
-        if (tokenClient) {
-          var origCb = tokenClient.callback;
-          tokenClient.callback = function(resp) {
-            tokenClient.callback = origCb;
-            if (resp.access_token) {
-              driveState.accessToken = resp.access_token;
-              driveState.tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
-              driveState.connected = true;
-              driveState.fileId = settings.driveFileId || null;
-              updateSyncStatus('Loading from Drive...');
-              loadFromDrive(false).then(function() {
-                if (settings.gcalSync !== false) {
-                  setTimeout(function() { pullFromCalendar(false); }, 500);
-                }
-              });
-            } else {
-              updateSyncStatus('Session expired — reconnect');
-            }
-          };
-          tokenClient.requestAccessToken({ prompt: '' });
-        }
+        silentReauth().then(function(ok) {
+          if (!ok) return;
+          driveState.fileId = settings.driveFileId || null;
+          syncToDrive(false).then(function() {
+            if (settings.gcalSync !== false) pullFromCalendar(false);
+          });
+        });
       }, 300);
     }
   }, 200);
-  setTimeout(function() { clearInterval(driveWait); }, 10000);
+  setTimeout(function() { clearInterval(driveWait); }, 15000);
 }
 
 updateSyncStatus();
 
 // ── TWO-WAY: PULL FROM CALENDAR ON FOCUS ─────────────────────────────
+window.addEventListener('online', function() { flushPendingSync(); });
 window.addEventListener('focus', function() {
+  flushPendingSync();
   if (driveState.connected && settings.gcalSync !== false) {
     clearTimeout(pullTimer);
     pullTimer = setTimeout(function() { pullFromCalendar(false); }, 800);
   }
 });
 document.addEventListener('visibilitychange', function() {
+  if (!document.hidden) flushPendingSync();
   if (!document.hidden && driveState.connected && settings.gcalSync !== false) {
     clearTimeout(pullTimer);
     pullTimer = setTimeout(function() { pullFromCalendar(false); }, 800);
   }
+});
+
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden && hasPendingChanges() && driveState.connected && !driveState.syncing) pushToDrive(false);
 });
 
 // ── PWA / OFFLINE SUPPORT ────────────────────────────────────────────
