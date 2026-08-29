@@ -734,12 +734,14 @@
           <button class="btn btn-secondary" onclick="loadFromDrive(true)">Reload from Drive &#8595;</button>
           <button class="btn btn-secondary" onclick="syncAllToCalendar()">Push all to GCal &#8593;</button>
           <button class="btn btn-secondary" onclick="pullFromCalendar(true)">Pull from GCal &#8595;</button>
+          <button class="btn btn-secondary" onclick="repairDriveSetup()">Check &amp; repair setup</button>
           <button class="btn btn-danger" onclick="disconnectDrive()">Disconnect</button>
         </div>
 
         <div style="margin-top:16px;padding:12px 16px;background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--radius);font-size:12.5px;color:var(--text2);" id="drive-status-box">
           Status: <span id="drive-status-text" style="color:var(--text3);">Not connected</span>
         </div>
+        <div style="margin-top:10px;padding:12px 16px;background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--radius);font-size:12px;" id="drive-diagnostics"></div>
       </div>
     </div>
   </main>
@@ -1105,7 +1107,7 @@ function navigate(page) {
   if (page === 'invoices')  renderInvoices();
   if (page === 'clients')   renderClients();
   if (page === 'analytics') renderAnalytics();
-  if (page === 'settings')  { loadSettings(); updateStatusPills(); }
+  if (page === 'settings')  { loadSettings(); updateStatusPills(); updateDriveDiagnostics(); }
   setTopbar(page);
   updateNavCounts();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2187,13 +2189,17 @@ function findOrCreateFolder(token, name, parentId) {
     }).then(function(r) { return r.json(); }).then(function(f) { return f.id; });
   });
 }
+var _appFolderPromise = null;
 function ensureAppFolder(token) {
   if (settings.appFolderId) return Promise.resolve(settings.appFolderId);
-  return findOrCreateFolder(token, APP_FOLDER_NAME, null).then(function(id) {
+  if (_appFolderPromise) return _appFolderPromise;
+  _appFolderPromise = findOrCreateFolder(token, APP_FOLDER_NAME, null).then(function(id) {
     settings.appFolderId = id;
     DB.set('settings', settings);
+    _appFolderPromise = null;
     return id;
-  });
+  }).catch(function(e) { _appFolderPromise = null; throw e; });
+  return _appFolderPromise;
 }
 function ensureInvoiceFolder(token) {
   if (settings.invoiceFolderId) return Promise.resolve(settings.invoiceFolderId);
@@ -2258,23 +2264,15 @@ function uploadInvoiceToDrive(inv, loud) {
     return ensureInvoiceFolder(token).then(function(folderId) {
       var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(invoiceDocName(inv)) + '</title></head>' +
         '<body style="font-family:Arial,Helvetica,sans-serif;">' + invoiceHtmlFor(inv) + '</body></html>';
-      var meta = inv.driveFileId
-        ? { name: invoiceDocName(inv) }
-        : { name: invoiceDocName(inv), mimeType: 'application/vnd.google-apps.document', parents: [folderId] };
-      var form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-      form.append('file', new Blob([html], { type: 'text/html' }));
-      var url = 'https://www.googleapis.com/upload/drive/v3/files' +
-        (inv.driveFileId ? '/' + inv.driveFileId : '') + '?uploadType=multipart&fields=id,webViewLink';
-      return fetch(url, {
-        method: inv.driveFileId ? 'PATCH' : 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: form
+      return driveUpload(token, {
+        fileId: inv.driveFileId,
+        name: invoiceDocName(inv),
+        parents: inv.driveFileId ? null : folderId,
+        targetMime: 'application/vnd.google-apps.document',
+        contentType: 'text/html',
+        blob: new Blob([html], { type: 'text/html' })
       });
     });
-  }).then(function(r) {
-    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
-    return r.json();
   }).then(function(f) {
     inv.driveFileId = f.id;
     inv.driveLink = f.webViewLink || ('https://drive.google.com/open?id=' + f.id);
@@ -2284,9 +2282,8 @@ function uploadInvoiceToDrive(inv, loud) {
     var cur = invoices.find(function(x) { return x.id === window._viewingInvoiceId; });
     if (cur) updateInvoiceDriveBtn(cur);
   }).catch(function(e) {
-    console.error(e);
     updateSyncStatus();
-    toast('Drive filing failed: ' + e.message, 'error');
+    reportSyncError('invoice not filed — ' + (e.message || e), true);
   });
 }
 function updateInvoiceDriveBtn(inv) {
@@ -2649,6 +2646,146 @@ function purgeSampleData() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// DRIVE UPLOAD — two-step instead of multipart
+//
+// The old path POSTed a multipart/form-data body to uploadType=multipart.
+// When Drive rejects that body the write fails with no file created, and
+// because background syncs pass showToast=false, it failed in silence.
+// Creating the file's metadata first and then PUTting the bytes is far more
+// predictable, and every step now reports what happened.
+// ═══════════════════════════════════════════════════════════════════════
+
+var lastSyncErrorToast = 0;
+function reportSyncError(msg, loud) {
+  settings.lastSyncError = new Date().toISOString() + ' — ' + msg;
+  DB.set('settings', settings);
+  console.error('[CineWork sync]', msg);
+  var now = Date.now();
+  if (loud || now - lastSyncErrorToast > 30000) {
+    lastSyncErrorToast = now;
+    toast('Drive: ' + msg, 'error');
+  }
+  updateSyncStatus();
+}
+function clearSyncError() {
+  if (settings.lastSyncError) {
+    delete settings.lastSyncError;
+    DB.set('settings', settings);
+  }
+}
+function driveFetch(token, url, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
+  return fetch(url, opts).then(function(r) {
+    if (r.ok) return r.status === 204 ? {} : r.json();
+    return r.text().then(function(body) {
+      var msg = 'HTTP ' + r.status;
+      try {
+        var j = JSON.parse(body);
+        if (j.error && j.error.message) msg += ' — ' + j.error.message;
+      } catch (e) { if (body) msg += ' — ' + body.slice(0, 140); }
+      var err = new Error(msg);
+      err.status = r.status;
+      throw err;
+    });
+  });
+}
+// Create (or reuse) the file record, then send the bytes to it.
+function driveUpload(token, opts) {
+  var metaStep;
+  if (opts.fileId) {
+    metaStep = Promise.resolve({ id: opts.fileId });
+  } else {
+    var meta = { name: opts.name };
+    if (opts.targetMime) meta.mimeType = opts.targetMime;
+    if (opts.parents) meta.parents = [opts.parents];
+    metaStep = driveFetch(token, 'https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meta)
+    });
+  }
+  return metaStep.then(function(file) {
+    if (!file || !file.id) throw new Error('Drive did not return a file id');
+    return driveFetch(token,
+      'https://www.googleapis.com/upload/drive/v3/files/' + file.id + '?uploadType=media&fields=id,modifiedTime,webViewLink',
+      { method: 'PATCH', headers: { 'Content-Type': opts.contentType }, body: opts.blob }
+    ).then(function(res) {
+      // renaming after the fact keeps the name in step without a second create
+      if (opts.fileId && opts.name) {
+        return driveFetch(token, 'https://www.googleapis.com/drive/v3/files/' + file.id + '?fields=id,modifiedTime,webViewLink', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: opts.name })
+        }).catch(function() { return res; });
+      }
+      return res;
+    });
+  });
+}
+
+// ── REPAIR ───────────────────────────────────────────────────────────
+// One button that walks the whole setup and says exactly where it stops.
+function repairDriveSetup() {
+  if (!driveState.connected) { toast('Connect Drive first', 'error'); return; }
+  driveState.syncing = false;          // clear any wedged state
+  driveState.syncQueued = false;
+  updateSyncStatus('Checking Drive...');
+  ensureToken().then(function(token) {
+    return ensureAppFolder(token).then(function(appId) {
+      toast('Folder ready: ' + APP_FOLDER_NAME);
+      return ensureInvoiceFolder(token).then(function() { return { token: token, appId: appId }; });
+    });
+  }).then(function(ctx) {
+    var q = encodeURIComponent("name='" + DATA_FILENAME + "' and trashed=false");
+    return driveFetch(ctx.token, 'https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name,parents)')
+      .then(function(d) {
+        if (d.files && d.files.length) {
+          driveState.fileId = d.files[0].id;
+          settings.driveFileId = driveState.fileId;
+          DB.set('settings', settings);
+          return moveFileTo(ctx.token, driveState.fileId, ctx.appId).then(function() {
+            toast('Found the spreadsheet — syncing now');
+          });
+        }
+        driveState.fileId = null;
+        settings.driveFileId = null;
+        DB.set('settings', settings);
+        toast('No spreadsheet yet — creating it');
+      });
+  }).then(function() {
+    return pushToDrive(true);
+  }).then(function() {
+    if (driveState.fileId) clearSyncError();
+    updateSyncStatus();
+    updateDriveDiagnostics();
+  }).catch(function(e) {
+    reportSyncError(e.message || String(e), true);
+    updateDriveDiagnostics();
+  });
+}
+function updateDriveDiagnostics() {
+  var el = document.getElementById('drive-diagnostics');
+  if (!el) return;
+  var rows = [
+    ['Google account', settings.driveAccount || '—'],
+    ['CineWork folder', settings.appFolderId ? 'created' : 'not created yet'],
+    ['Invoices folder', settings.invoiceFolderId ? 'created' : 'not created yet'],
+    ['Spreadsheet', driveState.fileId || settings.driveFileId || 'not created yet'],
+    ['Last sync', settings.lastSync ? new Date(settings.lastSync).toLocaleString() : 'never'],
+    ['Queued changes', hasPendingChanges() ? 'yes, waiting' : 'none'],
+    ['Last error', settings.lastSyncError || 'none']
+  ];
+  el.innerHTML = rows.map(function(r) {
+    return '<div style="display:flex;gap:10px;justify-content:space-between;padding:3px 0;">' +
+      '<span style="color:var(--text3);">' + r[0] + '</span>' +
+      '<span class="mono" style="text-align:right;word-break:break-all;color:' +
+        (r[0] === 'Last error' && settings.lastSyncError ? 'var(--red)' : 'var(--text2)') + ';">' +
+        escapeHtml(String(r[1])) + '</span></div>';
+  }).join('');
+}
+
 
 const save = () => {
   trackChanges();
@@ -2734,24 +2871,44 @@ function disconnectDrive() {
 function ensureToken() {
   return new Promise(function(resolve, reject) {
     if (driveState.accessToken && Date.now() < driveState.tokenExpiry) return resolve(driveState.accessToken);
-    if (!tokenClient) return reject(new Error('Not connected'));
+    if (!tokenClient) initDriveClient();
+    if (!tokenClient) return reject(new Error('Google sign-in not ready'));
+    var settled = false;
     var origCb = tokenClient.callback;
     tokenClient.callback = function(resp) {
       tokenClient.callback = origCb;
-      if (resp.access_token) {
+      if (settled) return;
+      settled = true;
+      if (resp && resp.access_token) {
         storeToken(resp.access_token, resp.expires_in);
         resolve(resp.access_token);
       } else {
         driveState.needsAuth = true;
         updateSyncStatus();
-        reject(new Error('No token'));
+        reject(new Error('Sign-in expired — tap the status line to reconnect'));
       }
     };
-    tokenClient.requestAccessToken({ prompt: '' });
+    try {
+      var req = { prompt: '' };
+      if (settings.driveAccount) req.hint = settings.driveAccount;
+      tokenClient.requestAccessToken(req);
+    } catch (e) {
+      settled = true;
+      reject(new Error('Sign-in failed: ' + e.message));
+    }
+    // Google sometimes never calls back inside a PWA window. Don't wait forever.
+    setTimeout(function() {
+      if (settled) return;
+      settled = true;
+      driveState.needsAuth = true;
+      updateSyncStatus();
+      reject(new Error('Sign-in timed out — tap the status line to reconnect'));
+    }, 12000);
   });
 }
 
 function onDriveConnected() {
+  clearTimeout(syncTimer);   // this function does the first sync itself
   updateSyncStatus('Finding data file...');
   ensureToken().then(function(token) {
     return migrateDriveLayout(token).then(function() { return token; });
@@ -2777,6 +2934,11 @@ function onDriveConnected() {
     });
   }).then(function() {
     updateSyncStatus();
+    updateDriveDiagnostics();
+    if (!driveState.fileId) {
+      toast('Connected — creating the spreadsheet', 'success');
+      return pushToDrive(true);
+    }
     toast('Google Drive connected!');
     // First-time or reconnect: pull from Calendar too
     if (settings.gcalSync !== false) {
@@ -2866,60 +3028,55 @@ function workbookToData(wb) {
 
 function pushToDrive(showToast) {
   if (!driveState.connected) { markPendingSync(); if (showToast) toast('Connect Drive first', 'error'); return Promise.resolve(); }
-  if (driveState.syncing) return Promise.resolve();
+  // watchdog: a sync that never finished must not block every later one
+  if (driveState.syncing && Date.now() - (driveState.syncStartedAt || 0) < 45000) {
+    driveState.syncQueued = true;
+    return Promise.resolve();
+  }
   driveState.syncing = true;
+  driveState.syncStartedAt = Date.now();
   updateSyncStatus('Syncing...');
   return ensureToken().then(function(token) {
     return ensureAppFolder(token).then(function(folderId) {
-      var wb = dataToWorkbook();
-      var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      var blob = new Blob([wbout], { type: XLSX_MIME });
-      var meta = { name: DATA_FILENAME, mimeType: XLSX_MIME };
-      if (!driveState.fileId && folderId) meta.parents = [folderId];
-      var form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-      form.append('file', blob);
-      var url, method;
-      if (driveState.fileId) {
-        url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveState.fileId + '?uploadType=multipart&fields=id,modifiedTime';
-        method = 'PATCH';
-      } else {
-        url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime';
-        method = 'POST';
-      }
-      return fetch(url, { method: method, headers: { Authorization: 'Bearer ' + token }, body: form });
+      var wbout = XLSX.write(dataToWorkbook(), { bookType: 'xlsx', type: 'array' });
+      return driveUpload(token, {
+        fileId: driveState.fileId,
+        name: DATA_FILENAME,
+        parents: driveState.fileId ? null : folderId,
+        targetMime: XLSX_MIME,
+        contentType: XLSX_MIME,
+        blob: new Blob([wbout], { type: XLSX_MIME })
+      });
     });
-  }).then(function(r) {
-    if (r.status === 404 && driveState.fileId) {
-      driveState.fileId = null;
-      settings.driveFileId = null;
-      driveState.syncing = false;
-      return pushToDrive(showToast);       // retry as a fresh file
-    }
-    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
-    return r.json();
   }).then(function(result) {
-    if (!result) return;
-    if (result.id) {
+    if (result && result.id) {
       driveState.fileId = result.id;
       settings.driveFileId = result.id;
     }
-    if (result.modifiedTime) settings.lastRemoteModified = result.modifiedTime;
+    if (result && result.modifiedTime) settings.lastRemoteModified = result.modifiedTime;
     driveState.lastSync = new Date().toISOString();
     settings.lastSync = driveState.lastSync;
     clearPendingSync();
+    clearSyncError();
     commitSnapshot();
     DB.set('settings', settings); // save without re-triggering scheduleSync
     driveState.syncing = false;
     updateSyncStatus();
-    if (showToast) toast('Synced to Drive!');
+    updateDriveDiagnostics();
+    if (showToast) toast('Spreadsheet updated in Drive');
+    if (driveState.syncQueued) { driveState.syncQueued = false; setTimeout(function() { pushToDrive(false); }, 500); }
   }).catch(function(e) {
     driveState.syncing = false;
-    console.error(e);
-    if (/401|403/.test(e.message || '')) { driveState.needsAuth = true; clearStoredToken(); }
-    markPendingSync();          // nothing is lost — it goes up on the next try
-    updateSyncStatus();
-    if (showToast) toast('Sync failed: ' + e.message + ' — changes are queued', 'error');
+    if (e && (e.status === 404) && driveState.fileId) {
+      driveState.fileId = null;             // file was deleted — make a new one
+      settings.driveFileId = null;
+      DB.set('settings', settings);
+      return pushToDrive(showToast);
+    }
+    if (e && (e.status === 401 || e.status === 403)) { driveState.needsAuth = true; clearStoredToken(); }
+    markPendingSync();                       // nothing is lost — it retries
+    reportSyncError(e.message || String(e), !!showToast);
+    updateDriveDiagnostics();
   });
 }
 
